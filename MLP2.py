@@ -81,7 +81,7 @@ class Model:
     what size their memory should be, and how many
     words can be predicted.
     """
-    def __init__(self, hidden_size, input_size, output_size, stack_size=1, celltype=RNN,steps=40):
+    def __init__(self, hidden_size, input_size, output_size, stack_size=1, celltype=Layer,steps=40):
         # declare model
         self.model = StackedCells(input_size, celltype=celltype, layers =[hidden_size] * stack_size)
         # add a classifier:
@@ -123,37 +123,35 @@ class Model:
                 self.results=T.concatenate([self.results,self.layerstatus[-1].dimshuffle((0,'x',1))],axis=1)
         return self.results'''
         
-        def step(idx,*states):
-            newstates=list(states)
-            new_states=self.model.forward(idx,prev_hiddens = newstates)
+        def step(idx):
+            new_states=self.model.forward(idx)
             return new_states#不论recursive与否，会全部输出
         
         x = self.x
         num_examples = x.shape[0]
-        outputs_info =[initial_state_with_taps(layer, num_examples) for layer in self.model.layers]
+        #outputs_info =[initial_state_with_taps(layer, num_examples) for layer in self.model.layers]
         #outputs_info = [initial_state_with_taps(layer, num_examples) for layer in self.model.layers[1:]]
         result, _ = theano.scan(fn=step,
                                 n_steps=self.steps,
                                 sequences=dict(input=x.dimshuffle((1,0,2)), taps=[-0]),
-                                outputs_info=outputs_info)
+                                )
                                 
 
         return result[-1].dimshuffle((1,0,2))
         
     def create_prediction2(self):#做一次predict的方法        
-        def step(idx,*states):
-            newstates=list(states)
-            new_states=self.model.forward(idx,prev_hiddens = newstates)
+        def step(idx):
+            new_states=self.model.forward(idx)
             return new_states#不论recursive与否，会全部输出
         
         x = self.x
         num_examples = x.shape[0]
-        outputs_info =[initial_state_with_taps(layer, num_examples) for layer in self.model.layers]
+        #outputs_info =[initial_state_with_taps(layer, num_examples) for layer in self.model.layers]
         #outputs_info = [initial_state_with_taps(layer, num_examples) for layer in self.model.layers[1:]]
         result, _ = theano.scan(fn=step,
                                 n_steps=self.stepsin,
                                 sequences=dict(input=x.dimshuffle((1,0,2)), taps=[-0]),
-                                outputs_info=outputs_info)
+                                )
                                 
 
         return result[-1].dimshuffle((1,0,2))
@@ -162,7 +160,7 @@ class Model:
         self.cost = (self.predictions - self.target).norm(L=2)
 
     def create_valid_error(self):
-        self.valid_error=T.mean(T.abs_((self.predictions - self.target)/(self.target+0.01)),axis=0)
+        self.valid_error=T.mean(T.abs_(self.predictions - self.target),axis=0)
                 
     def create_predict_function(self):
         self.pred_fun = theano.function(inputs=[self.x],outputs =self.predictions,allow_input_downcast=True)
@@ -251,10 +249,10 @@ def onecircle(setlength,setn_epochs):
     steps=length
     RNNobj = Model(
         input_size=5,
-        hidden_size=10,
+        hidden_size=40,
         output_size=3,
         stack_size=1, # make this bigger, but makes compilation slow
-        celltype=RNN, # use RNN or LSTM
+        celltype=Layer, # use RNN or LSTM
         steps=steps
     )
     
@@ -303,9 +301,9 @@ def onecircle(setlength,setn_epochs):
     
     return train_error,valid_error,valid_error3,RNNobj
 
-lengthlist=[5,10,20,40]
+lengthlist=[1]
 RNNobjlist=range(len(lengthlist))
-n_epochs=200
+n_epochs=100
 train_error=np.zeros((len(lengthlist),n_epochs))
 valid_error=np.zeros((len(lengthlist),n_epochs))
 valid_error3=np.zeros((len(lengthlist),n_epochs,3))
@@ -368,13 +366,13 @@ paramax=np.amax(np.amax(data,axis=0),axis=0)[None,None,:]
 data=(data-paramin)/(paramax-paramin)
     
 X,Y=np.split(data,[5],axis=2)
-s=2    
+s=6    
 a=RNNobjlist[0].pred_fun2(X[s:s+1],40)
 plt.figure('real curve-predict curve')
 plt.plot(a[0,:,0],'--', label='predict turn angle', linewidth=2)
 plt.plot(a[0,:,1],'--', label='predict brake', linewidth=2)
 plt.plot(a[0,:,2],'--', label='predict speed', linewidth=2)
-plt.title('Real Sequence-Predict Sequence - Length 5 at Epoch: %d'%(n_epochs))
+plt.title('Real Sequence-Predict Sequence - Length 1 at Epoch: %d'%(n_epochs))
 plt.xlabel('Sequence')
 plt.ylabel('Value')
 plt.plot(Y[s,:,0],'o-', label='real turn angle', linewidth=2)
