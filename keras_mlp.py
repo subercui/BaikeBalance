@@ -77,7 +77,7 @@ np.random.shuffle(data)
 
 batch_size = 40
 nb_classes = 3
-nb_epoch = 200
+nb_epoch = 10000
 
 # the data, shuffled and split between tran and test sets
 train_data,test_data=np.split(data,[int(0.8*data.shape[0])],axis=0)

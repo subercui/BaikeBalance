@@ -19,8 +19,30 @@ theano.config.scan.allow_gc='False'
 #theano.config.device = 'gpu'
 
 today=datetime.today()
+#super paramiters
+lengthlist=[1]
+n_epochs=100
+n_hiddens=100
+n_stacks=1
+alpha=10
+is_augment=False
+
 def augment(data):
-    #part0=data[:,:,]
+    part0=np.mean(data[:,:,6]==0)
+    part1=np.mean(data[:,:,6]==1)
+    part2=np.mean(data[:,:,6]==2)
+    times21=part2/part1
+    times20=part2/part0
+    more=np.array(data[0:1])
+    for i in range(data.shape[0]):
+        for j in range(data.shape[1]):
+            if data[i,j,6]==0:
+                more=np.concatenate((more,np.tile(data[i,:,:],(int(times20/data.shape[1]),1,1))),axis=0)
+            if data[i,j,6]==1:
+                more=np.concatenate((more,np.tile(data[i,:,:],(int(times21/data.shape[1]),1,1))),axis=0)
+    data=np.concatenate((data,more),axis=0)
+    np.random.shuffle(data)
+    
     return data
 
 def softmax(x):
@@ -146,7 +168,7 @@ class Model:
         
     def create_cost_fun (self):
         y=self.target1[:,0,0]                                 
-        self.cost = (self.predictions0 - self.target0[:,:,0:1]).norm(L=2)+10*(-T.mean(T.log(self.predictions1)[T.arange(y.shape[0]),:,y]))
+        self.cost = (self.predictions0 - self.target0[:,:,0:1]).norm(L=2)+alpha*(-T.mean(T.log(self.predictions1)[T.arange(y.shape[0]),:,y]))
 
     def create_valid_error(self):
         self.valid_error0=T.mean(T.abs_(self.predictions0 - self.target0[:,:,0:1]),axis=0)
@@ -240,9 +262,12 @@ def onecircle(setlength,setn_epochs):
     
     train_data,test_data=np.split(data,[int(0.8*data.shape[0])],axis=0)
     #augment
-    train_data=augment(train_data)
+    if is_augment==True:
+        train_data=augment(train_data)
     X_train,Y_train=np.split(train_data,[5],axis=2)
     X_test, Y_test=np.split(test_data,[5],axis=2)
+    print "train_data:",train_data.shape
+    print "test_data:",test_data.shape
                     
     ######################
     # BUILD ACTUAL MODEL #
@@ -251,9 +276,9 @@ def onecircle(setlength,setn_epochs):
     steps=length
     RNNobj = Model(
         input_size=5,
-        hidden_size=10,
+        hidden_size=n_hiddens,
         output_size=[1,3],
-        stack_size=1, # make this bigger, but makes compilation slow
+        stack_size=n_stacks, # make this bigger, but makes compilation slow
         celltype=Layer, # use RNN or LSTM
     )
     
@@ -267,7 +292,7 @@ def onecircle(setlength,setn_epochs):
     valid_batches=X_test.shape[0]/batch
     
     #a=RNNobj.pred_fun(X_train[batch*0:batch*(0+1)])
-    
+        
     train_error=np.zeros(setn_epochs)
     valid_error0=np.zeros(setn_epochs)
     valid_error1=np.zeros(setn_epochs)
@@ -279,31 +304,39 @@ def onecircle(setlength,setn_epochs):
         print ("epoch %(epoch)d,\n  train error=%(error)f" % ({"epoch": k+1, "error": error}))
         train_error[k]=error
         
+        heatmatrix_category=np.zeros((3,3))#3×3误分类矩阵，第一维是真实维，第二维是预测维，对角线上是正确的
+
         valid_error_addup0=0
         valid_error_addup1=0
         for i in xrange(valid_batches): #an epoch
             error0,error1=RNNobj.valid_fun(X_test[batch*i:batch*(i+1)],Y_test[batch*i:batch*(i+1),:,0:1],np.floor(Y_test[batch*i:batch*(i+1),:,1:2]),setlength)
+            
+            result=RNNobj.pred_fun(X_test[batch*i:batch*(i+1)],setlength)
+            predindex=np.array(np.argmax(result[1],axis=2).reshape(batch),dtype=int)
+            realindex=np.array(Y_test[batch*i:batch*(i+1),:,1],dtype=int)
+            heatmatrix_category[realindex,predindex]=heatmatrix_category[realindex,predindex]+1
+
             valid_error_addup0=error0+valid_error_addup0
             valid_error_addup1=error1+valid_error_addup1
         error0=valid_error_addup0[0,0]/(i+1)
         error1=valid_error_addup1/(i+1)
         print ("  validation error:%(error0).4f %(error1).4f\n"%({"epoch":k+1, "error0":error0, "error1":error1}))
+        #print heatmatrix_category
         #print error
         valid_error0[k]=error0
         valid_error1[k]=error1
         #print valid_error_addup0/(i+1), valid_error_addup1/(i+1)
+    print 'heatmatrix_category',heatmatrix_category
         
     
-    return train_error,valid_error0,valid_error1,RNNobj
+    return train_error,valid_error0,valid_error1,RNNobj,heatmatrix_category
 
-lengthlist=[1]
 RNNobjlist=range(len(lengthlist))
-n_epochs=200
 train_error=np.zeros((len(lengthlist),n_epochs))
 valid_error0=np.zeros((len(lengthlist),n_epochs))
 valid_error1=np.zeros((len(lengthlist),n_epochs))
 for i in range(len(lengthlist)):
-    train_error[i],valid_error0[i],valid_error1[i],RNNobjlist[i]=onecircle(lengthlist[i],n_epochs)
+    train_error[i],valid_error0[i],valid_error1[i],RNNobjlist[i],heat=onecircle(lengthlist[i],n_epochs)
     #############
     # VISUALIZE #
     #############
@@ -360,6 +393,53 @@ plt.show()'''
 # Real TEST #
 ###############
 print 'real test'
+matchs=filesinroot(path,"grass",0)
+data=[]
+for entry in matchs:
+    print entry
+    data.append(np.loadtxt(path+entry,delimiter=','))
+    
+length=1
+expcnt=0
+for entry in data:
+    expcnt=expcnt+entry.shape[0]/length
+dataset=np.zeros((expcnt,length,8))  
+cnt=0 
+for entry in data:
+    print entry.shape
+    for i in range(entry.shape[0]/length):
+        dataset[cnt,:,:]=entry[i*length:(i+1)*length,:]
+        cnt=cnt+1
+data=dataset
+    
+data=np.asarray(data,dtype='float32')
+np.random.shuffle(data)
+paramin=np.amin(np.amin(data,axis=0),axis=0)[None,None,:]
+paramax=np.amax(np.amax(data,axis=0),axis=0)[None,None,:]
+data=(data-paramin)/(paramax-paramin)
+#categorize
+for i in range(data.shape[0]):
+    for j in range(data.shape[1]):
+        if data[i,j,6]>0.9:
+            data[i,j,6]=2
+        elif data[i,j,6]>0.1 and data[i,j,6]<0.9:
+            data[i,j,6]=1
+        else:
+            data[i,j,6]=0
+    
+train_data,test_data=np.split(data,[1],axis=0)
+#augment
+if is_augment==True:
+    train_data=augment(train_data)
+X_train,Y_train=np.split(train_data,[5],axis=2)
+X_test, Y_test=np.split(test_data,[5],axis=2)
+print "train_data:",train_data.shape
+print "test_data:",test_data.shape
+error0,error1=RNNobjlist[0].valid_fun(X_test,Y_test[:,:,0:1],np.floor(Y_test[:,:,1:2]),length)
+print 'grass error0',error0,'grass error 1',error1
+
+
+#以上是重新截取测试集，以下是对比
 f=gzip.open(parent_path+'/dataset.pkl.gz','rb')
 data=cPickle.load(f)
 data=np.asarray(data,dtype='float32')
@@ -393,7 +473,7 @@ plt.plot(Y[s,:,1],'o-', label='real brake', linewidth=2)
 plt.legend(loc='best', fancybox=True, framealpha=0.5)
 plt.show()
     
-'''##############
+##############
 # SAVE MODEL #
 ##############
 savedir='/data/pm25data/model/RNNModel'+today.strftime('%Y%m%d')+'.pkl.gz'
@@ -403,7 +483,7 @@ cPickle.dump(para_min, save_file, -1)#scaling paras
 cPickle.dump(para_max, save_file, -1)
 save_file.close()
 
-print ('model saved at '+savedir)'''
+print ('model saved at '+savedir)
 
 
 '''
