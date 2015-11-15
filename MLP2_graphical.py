@@ -21,11 +21,16 @@ theano.config.scan.allow_gc='False'
 today=datetime.today()
 #super paramiters
 lengthlist=[1]
-n_epochs=100
-n_hiddens=100
-n_stacks=1
-alpha=10
+n_epochs=300
+n_hiddens=[100]
+alpha=100
+setbatch=100#确定
 is_augment=False
+lnmethed="adagrad"#确定
+if lnmethed=="adagrad":
+    setlr=0.01
+else:
+    setlr=0.001
 
 def augment(data):
     part0=np.mean(data[:,:,6]==0)
@@ -117,12 +122,12 @@ class Model:
     what size their memory should be, and how many
     words can be predicted.
     """
-    def __init__(self, hidden_size, input_size, output_size, stack_size=1, celltype=Layer):
+    def __init__(self, hidden_size, input_size, output_size, celltype=Layer):
         # declare model
-        self.model = StackedCells(input_size, celltype=celltype, layers =[hidden_size] * stack_size)
+        self.model = StackedCells(input_size, celltype=celltype, layers =hidden_size)
         # add a classifier:
-        self.regression=Layer(hidden_size, output_size[0], activation = T.tanh)
-        self.classifier=Layer(hidden_size, output_size[1], activation = softmax)
+        self.regression=Layer(hidden_size[-1], output_size[0], activation = T.tanh)
+        self.classifier=Layer(hidden_size[-1], output_size[1], activation = softmax)
         # inputs are matrices of indices,
         # each row is a sentence, each column a timestep
         self.steps=T.iscalar('steps')
@@ -179,7 +184,7 @@ class Model:
         self.pred_fun = theano.function(inputs=[self.x,self.steps],outputs =[self.predictions0,self.predictions1],allow_input_downcast=True)
                                  
     def create_training_function(self):
-        updates, gsums, xsums, lr, max_norm = create_optimization_updates(self.cost, self.params, method="adadelta")#这一步Gradient Decent!!!!
+        updates, gsums, xsums, lr, max_norm = create_optimization_updates(self.cost, self.params, lr=setlr, method=lnmethed)#这一步Gradient Decent!!!!
         self.update_fun = theano.function(
             inputs=[self.x, self.target0,self.target1,self.steps],
             outputs=self.cost,
@@ -278,16 +283,35 @@ def onecircle(setlength,setn_epochs):
         input_size=5,
         hidden_size=n_hiddens,
         output_size=[1,3],
-        stack_size=n_stacks, # make this bigger, but makes compilation slow
         celltype=Layer, # use RNN or LSTM
     )
-    
+        
     ###############
     # TRAIN MODEL #
     ###############
     print '... training'
+    #baseline
+    def baseline_pred(X_test,setlength=1):
+        X_test=X_test*(paramax[:,:,:5]-paramin[:,:,:5])+paramin[:,:,:5]
+        index=np.zeros(X_test.shape[0],dtype=int)
+        for i in xrange(X_test.shape[0]):
+            delta_v=np.abs(4.394*X_test[i,0,4]-6.3-X_test[i,0,3])
+            if delta_v<0.2:
+                index[i]=2
+            elif delta_v>0.8:
+                index[i]=0
+            else:
+                index[i]=1
+        return index
+    heatmatrix_category=np.zeros((3,3),dtype=int)#3×3误分类矩阵，第一维是真实维，第二维是预测维，对角线上是正确的
+    predindex=baseline_pred(X_test,setlength)
+    realindex=np.array(Y_test[:,0,1],dtype=int)
+    for j in xrange(X_test.shape[0]):
+        heatmatrix_category[realindex[j],predindex[j]]=heatmatrix_category[realindex[j],predindex[j]]+1
+    print 'bseline heatmatrix:\n',heatmatrix_category
     
-    batch=40
+    #neural nets
+    batch=setbatch
     train_batches=X_train.shape[0]/batch
     valid_batches=X_test.shape[0]/batch
     
@@ -297,46 +321,61 @@ def onecircle(setlength,setn_epochs):
     valid_error0=np.zeros(setn_epochs)
     valid_error1=np.zeros(setn_epochs)
     for k in xrange(setn_epochs):#run k epochs
+        #train:
+        index=np.random.permutation(X_train.shape[0])
+        X_train=X_train[index]
+        Y_train=Y_train[index]
         error_addup=0
         for i in xrange(train_batches): #an epoch
             error_addup=RNNobj.update_fun(X_train[batch*i:batch*(i+1)],Y_train[batch*i:batch*(i+1),:,0:1],np.floor(Y_train[batch*i:batch*(i+1),:,1:2]),setlength)+error_addup
         error=error_addup/(i+1)
-        print ("epoch %(epoch)d,\n  train error=%(error)f" % ({"epoch": k+1, "error": error}))
+        print ("\nepoch %(epoch)d,\n  train error=%(error)f" % ({"epoch": k+1, "error": error}))
         train_error[k]=error
         
-        heatmatrix_category=np.zeros((3,3))#3×3误分类矩阵，第一维是真实维，第二维是预测维，对角线上是正确的
+        heatmatrix_category=np.zeros((3,3),dtype=int)#3×3误分类矩阵，第一维是真实维，第二维是预测维，对角线上是正确的
+        result=RNNobj.pred_fun(X_train,setlength)
+        predindex=np.array(np.argmax(result[1],axis=2).reshape(-1),dtype=int)
+        realindex=np.array(Y_train[:,0,1],dtype=int)
+        for j in xrange(X_train.shape[0]):
+            heatmatrix_category[realindex[j],predindex[j]]=heatmatrix_category[realindex[j],predindex[j]]+1
+        print 'train heatmatrix:\n',heatmatrix_category        
 
+        #valid
         valid_error_addup0=0
         valid_error_addup1=0
         for i in xrange(valid_batches): #an epoch
             error0,error1=RNNobj.valid_fun(X_test[batch*i:batch*(i+1)],Y_test[batch*i:batch*(i+1),:,0:1],np.floor(Y_test[batch*i:batch*(i+1),:,1:2]),setlength)
-            
-            result=RNNobj.pred_fun(X_test[batch*i:batch*(i+1)],setlength)
-            predindex=np.array(np.argmax(result[1],axis=2).reshape(batch),dtype=int)
-            realindex=np.array(Y_test[batch*i:batch*(i+1),:,1],dtype=int)
-            heatmatrix_category[realindex,predindex]=heatmatrix_category[realindex,predindex]+1
-
             valid_error_addup0=error0+valid_error_addup0
             valid_error_addup1=error1+valid_error_addup1
         error0=valid_error_addup0[0,0]/(i+1)
         error1=valid_error_addup1/(i+1)
-        print ("  validation error:%(error0).4f %(error1).4f\n"%({"epoch":k+1, "error0":error0, "error1":error1}))
-        #print heatmatrix_category
+        print ("  validation error:%(error0).4f %(error1).4f"%({"epoch":k+1, "error0":error0, "error1":error1}))
         #print error
         valid_error0[k]=error0
         valid_error1[k]=error1
         #print valid_error_addup0/(i+1), valid_error_addup1/(i+1)
-    print 'heatmatrix_category',heatmatrix_category
         
+        heatmatrix_category=np.zeros((3,3),dtype=int)#3×3误分类矩阵，第一维是真实维，第二维是预测维，对角线上是正确的
+        result=RNNobj.pred_fun(X_test,setlength)
+        predindex=np.array(np.argmax(result[1],axis=2).reshape(-1),dtype=int)
+        realindex=np.array(Y_test[:,0,1],dtype=int)
+        for j in xrange(X_test.shape[0]):
+            heatmatrix_category[realindex[j],predindex[j]]=heatmatrix_category[realindex[j],predindex[j]]+1
+        print 'valid heatmatrix:\n',heatmatrix_category
+        
+    print 'heatmatrix_category \n',heatmatrix_category
+    ###############
+    # Visualyzing #
+    ###############
     
-    return train_error,valid_error0,valid_error1,RNNobj,heatmatrix_category
+    return train_error,valid_error0,valid_error1,RNNobj,heatmatrix_category,paramin,paramax
 
 RNNobjlist=range(len(lengthlist))
 train_error=np.zeros((len(lengthlist),n_epochs))
 valid_error0=np.zeros((len(lengthlist),n_epochs))
 valid_error1=np.zeros((len(lengthlist),n_epochs))
 for i in range(len(lengthlist)):
-    train_error[i],valid_error0[i],valid_error1[i],RNNobjlist[i],heat=onecircle(lengthlist[i],n_epochs)
+    train_error[i],valid_error0[i],valid_error1[i],RNNobjlist[i],heat,paramin,paramax=onecircle(lengthlist[i],n_epochs)
     #############
     # VISUALIZE #
     #############
@@ -414,8 +453,6 @@ data=dataset
     
 data=np.asarray(data,dtype='float32')
 np.random.shuffle(data)
-paramin=np.amin(np.amin(data,axis=0),axis=0)[None,None,:]
-paramax=np.amax(np.amax(data,axis=0),axis=0)[None,None,:]
 data=(data-paramin)/(paramax-paramin)
 #categorize
 for i in range(data.shape[0]):
@@ -444,8 +481,6 @@ f=gzip.open(parent_path+'/dataset.pkl.gz','rb')
 data=cPickle.load(f)
 data=np.asarray(data,dtype='float32')
 #np.random.shuffle(data)
-paramin=np.amin(np.amin(data,axis=0),axis=0)[None,None,:]
-paramax=np.amax(np.amax(data,axis=0),axis=0)[None,None,:]
 data=(data-paramin)/(paramax-paramin)
 #categorize
 for i in range(data.shape[0]):
@@ -476,11 +511,11 @@ plt.show()
 ##############
 # SAVE MODEL #
 ##############
-savedir='/data/pm25data/model/RNNModel'+today.strftime('%Y%m%d')+'.pkl.gz'
+savedir='/Users/subercui/Git/BaikeBalance/BikeModel.pkl.gz'
 save_file = gzip.open(savedir, 'wb')
-cPickle.dump(RNNobj.model.params, save_file, -1)
-cPickle.dump(para_min, save_file, -1)#scaling paras
-cPickle.dump(para_max, save_file, -1)
+cPickle.dump(RNNobjlist[0].params, save_file, -1)
+cPickle.dump(paramin, save_file, -1)#scaling paras
+cPickle.dump(paramax, save_file, -1)
 save_file.close()
 
 print ('model saved at '+savedir)
@@ -492,8 +527,82 @@ print ('model saved at '+savedir)
 学习方面：lr,costfunction中比例α
 1.网络（5，10，1+3），batch40，tanh，α=10得到
 error=2.112704 valid[[ 0.04164371]] 0.950704225352
+[[  70   19    0]
+ [   8  211  252]
+ [   0   27 5093]]
 2.网络（5，10，1+3），batch40，tanh，α=5得到
 epoch 200, error=1.216951 valid[[ 7.822875%]] 0.95
 3.网络（5，10，1+3），batch40，tanh，α=100得到
 从epoch195开始震荡，train loss上升，不对了
+[[  67   16    0]
+ [   7  224  213]
+ [   0   71 5082]]
+4.网络（5，100，1+3），batch100，tanh，α=100得到
+epoch 386,train error=18.269919，validation error:0.0432 0.9523
+valid heatmatrix:
+[[  69   17    0]
+ [   4  214  213]
+ [   1   33 5132]]
+
+'''
+
+'''
+误差矩阵，第二类分的不好，应该专门拿出来看一下
+[[  70   19    0]
+ [   8  211  252]
+ [   0   27 5093]]
+ 1.提高alpha，得到
+ [[  67   16    0]
+ [   7  224  213]
+ [   0   71 5082]]
+ 2.data augumentation，反而下降了
+ [[  75   10    0]
+ [  24  322  113]
+ [   2  423 4711]]
+3.减少神经元到极限2个，这个是变差了倒是正常，但增多效果也不好
+[[  54   38    0]
+ [   5  175  274]
+ [   1   25 5108]]
+4.增加层数多一层，(100*2),alpha=100,没大用
+[[  65   31    0]
+ [   3  210  272]
+ [   0   33 5066]]
+5.增加batch，下降更稳定
+[[  69   18    0]
+ [   8  232  223]
+ [   2   29 5102]]
+6.更新学习方法，adagrad,好了！！首先确定这一个改动是好的，试图再增加第二项改动
+[[  69   18    0]
+ [   8  232  223]
+ [   2   29 5102]]
+7.adagrad+data augumentation,第二类，第一类是变好了，可以再比一下F值
+ [[ 101    3    0]
+ [  37  304  113]
+ [   1  621 4503]]
+7.adagrad+batch=100，下降更稳定，准确度破纪录
+[[  69   17    0]
+ [   4  214  213]
+ [   1   33 5132]]
+
+
+'''
+'''
+总结：
+网络顾此失彼，参数优化一方面好了，另一方面就受影响
+表现是网络太小，同时学习方法没学好？
+
+'''
+'''
+猜测：
+1.关于半刹车总有误分类，是否有可能几个训练集之间调过参数，导致不好分类？
+第二类和第三类交织在一起了，这也解释了data augumented之后为什么出现影响第三类的分辨
+1.（1）检验我就用一个训练集试试，
+1.(2)base line predict 检验
+[[  74   15    0]
+ [  24  269  191]
+ [  14  471 4625]]
+终于明白了，就是这个问题！
+
+2.模型是否不够大或者说还没学够，因为data augument之后第三类准确度就下降了
+
 '''
