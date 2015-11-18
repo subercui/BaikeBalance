@@ -206,7 +206,7 @@ def filesinroot(dir,wildcard,recursion):
             break
     return matchs
 path='./DataCut/'
-matchs=filesinroot(path,".txt",0)
+matchs=filesinroot(path,"track",0)
 
 def onecircle(setlength,setn_epochs):
     

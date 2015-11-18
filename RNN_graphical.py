@@ -20,11 +20,11 @@ theano.config.scan.allow_gc='False'
 
 today=datetime.today()
 #super paramiters
-lengthlist=[1]
+lengthlist=[5]
 n_epochs=300
 n_hiddens=[100]
 alpha=100
-setbatch=100#确定
+setbatch=400#确定
 is_augment=False
 lnmethed="adagrad"#确定
 if lnmethed=="adagrad":
@@ -122,7 +122,7 @@ class Model:
     what size their memory should be, and how many
     words can be predicted.
     """
-    def __init__(self, hidden_size, input_size, output_size, celltype=Layer):
+    def __init__(self, hidden_size, input_size, output_size, celltype=RNN):
         # declare model
         self.model = StackedCells(input_size, celltype=celltype, layers =hidden_size)
         # add a classifier:
@@ -152,23 +152,26 @@ class Model:
         return self.model.params+self.regression.params+self.classifier.params
         
     def create_prediction(self):#做一次predict的方法        
-        def step(idx):
-            new_states=self.model.forward(idx)
+        def step(idx,*states):
+            newstates=list(states)
+            print 'len(newstates): ',len(newstates)
+            new_states=self.model.forward(idx,prev_hiddens = newstates)
             output0=self.regression.activate(new_states[-1])
             output1=self.classifier.activate(new_states[-1])
-            return [output0,output1]#不论recursive与否，会全部输出
+            return new_states+[output0,output1]#不论recursive与否，会全部输出
         
         x = self.x
         num_examples = x.shape[0]
-        #outputs_info =[initial_state_with_taps(layer, num_examples) for layer in self.model.layers]
-        #outputs_info = [initial_state_with_taps(layer, num_examples) for layer in self.model.layers[1:]]
-        [result0,result1], _ = theano.scan(fn=step,
+        outputs_info =[initial_state(layer, num_examples) for layer in self.model.layers,None,None]
+        result, _ = theano.scan(fn=step,
                                 n_steps=self.steps,
                                 sequences=dict(input=x.dimshuffle((1,0,2)), taps=[-0]),
+                                outputs_info=[initial_state(self.model.layers[0], num_examples),None,None],
+                                truncate_gradient=-1
                                 )
                                 
 
-        return result0.dimshuffle((1,0,2)),result1.dimshuffle((2,0,1))
+        return result[-2].dimshuffle((1,0,2)),result[-1].dimshuffle((2,0,1))
         
         
     def create_cost_fun (self):
@@ -283,7 +286,7 @@ def onecircle(setlength,setn_epochs):
         input_size=5,
         hidden_size=n_hiddens,
         output_size=[1,3],
-        celltype=Layer, # use RNN or LSTM
+        celltype=RNN, # use RNN or LSTM
     )
         
     ###############
