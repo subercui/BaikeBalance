@@ -33,44 +33,25 @@ void init_ttyS(int fd)
 	}
 int main(int argn,char** argv){
 	//system("/bin/sh ./detectscript.sh");
-	int t,fd,ret;
-	unsigned char wr_buf[256]="GOOD BOY";
-	if(argn >= 7){
-		wr_buf[0] = 0xff;
-		wr_buf[1] = 0x00;
-		wr_buf[2] = 0x09;
-		wr_buf[3] = 0x05;
-		wr_buf[4] =  (unsigned char)atoi(argv[1]);
-		wr_buf[5] =  (unsigned char)atoi(argv[2]);
-		wr_buf[8] = (unsigned char)atoi(argv[3]);
-		wr_buf[9] = (unsigned char)atoi(argv[4]);
-		wr_buf[10] = (unsigned char)atoi(argv[5]);
-		wr_buf[11] = (unsigned char)atoi(argv[6]);
-		wr_buf[6] = (unsigned char)((wr_buf[8]+wr_buf[10])/2);
-		wr_buf[7] = (unsigned char)((wr_buf[9]+wr_buf[11])/2);
-		wr_buf[12]	= 0xA0;
-	}
-	wr_buf[13] = wr_buf[0];
-	for (t = 1;t<12;t++){
-		wr_buf[13] ^= wr_buf[t];
-	}
-	wr_buf[12] = wr_buf[13];
+	int t,fd,nread;
+	unsigned char buff[256];
 	char device[]="/dev/ttyS0";
 	printf("\n UART Working\n");
-	fd=open(device,O_RDWR);
+	fd=open(device,O_RDONLY);
 	if(fd<0)
 	{
 		printf("open uart0 failed");
 		return -1;
 	}
 	 else 
-	 printf("\n success open uart0\n");
+	printf("\n success open uart0\n");
 	init_ttyS(fd);
 	while(1){
-	ret=read(fd,wr_buf,13);
+	nread=read(fd,buff,13);
+    buff[nread]='\0';
 	printf("SEND DATA\n");
-	printf("%d",ret);
-	usleep(1000000);
+	printf("%s\n",buff);
+	usleep(10);
 	}
 	close(fd);
 	return 0;

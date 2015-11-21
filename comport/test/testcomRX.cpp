@@ -18,7 +18,7 @@ void init_ttyS(int fd)
 	bzero(&newtio,sizeof(newtio));
 	tcgetattr(fd,&newtio);
 	cfsetispeed(&newtio,B115200);
-	cfsetospeed(&newtio,B115200);
+	cfsetospeed(&newtio,B115200);// above 3 lines, set boltrate
 	newtio.c_cflag |=(CLOCAL|CREAD);
 	newtio.c_cflag &=~PARENB;
 	newtio.c_cflag &=~CSTOPB;
@@ -66,11 +66,12 @@ int main(int argn,char** argv){
 	 else 
 	 printf("\n success open uart0\n");
 	init_ttyS(fd);
-	//while(1){
-	ret=write(fd,wr_buf,13);
+	while(1){
+	ret=read(fd,wr_buf,13);
 	printf("SEND DATA\n");
+	printf("%d",ret);
 	usleep(1000000);
-	//}
+	}
 	close(fd);
 	return 0;
 }

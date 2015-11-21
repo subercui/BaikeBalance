@@ -66,11 +66,11 @@ int main(int argn,char** argv){
 	 else 
 	 printf("\n success open uart0\n");
 	init_ttyS(fd);
-	//while(1){
+	while(1){
 	ret=write(fd,wr_buf,13);
 	printf("SEND DATA\n");
 	usleep(1000000);
-	//}
+	}
 	close(fd);
 	return 0;
 }
