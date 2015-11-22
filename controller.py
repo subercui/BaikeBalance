@@ -3,27 +3,10 @@ import theano, theano.tensor as T
 import numpy as np
 from matplotlib import pyplot as plt
 import theano_lstm
-import random,re,os,time,serial
+import random,re,os,time,serial,math
 import cPickle, gzip
 from theano_lstm import LSTM, RNN, StackedCells, Layer, create_optimization_updates
-
-def augment(data):
-    part0=np.mean(data[:,:,6]==0)
-    part1=np.mean(data[:,:,6]==1)
-    part2=np.mean(data[:,:,6]==2)
-    times21=part2/part1
-    times20=part2/part0
-    more=np.array(data[0:1])
-    for i in range(data.shape[0]):
-        for j in range(data.shape[1]):
-            if data[i,j,6]==0:
-                more=np.concatenate((more,np.tile(data[i,:,:],(int(times20/data.shape[1]),1,1))),axis=0)
-            if data[i,j,6]==1:
-                more=np.concatenate((more,np.tile(data[i,:,:],(int(times21/data.shape[1]),1,1))),axis=0)
-    data=np.concatenate((data,more),axis=0)
-    np.random.shuffle(data)
-    
-    return data
+pi=math.pi
 
 def softmax(x):
     """
@@ -213,8 +196,59 @@ def hexShow(argv):
     for i in xrange(hLen):  
         hvol = ord(argv[i])  
         hhex = '%02x'%hvol  
-        result += hhex+' '  
+        result += hhex  
     print 'hexShow:',result
+    return result
+
+def genOutput(a,RNNobj,para_min,para_max):
+    #检验起始FF
+    if int(a[0:2], 16)!=255:
+        raise Exception,'missing header ff'
+    if int(a[4:6], 16)!=23:
+        raise Exception,'wrong length flag'
+    if int(a[6:8], 16)!=2:
+        raise Exception,'wrong length flag'
+    #decode
+    speed=int(a[8:12], 16)#两字节车速
+    lean=int(a[12:16], 16)#
+    leanspeed=int(a[16:20], 16)
+    U0=int(a[40:44], 16)
+    turncontrol=int(a[44:48], 16)
+    speed=speed/1000.
+    lean=(lean/10000.-1.)*180/pi
+    leanspeed=leanspeed/10000.-1
+    U0=U0/1000.
+    turncontrol=(turncontrol/10000.-1.)*180/pi
+    inputs=np.array([[[lean,leanspeed,turncontrol,speed,U0]]], dtype='float32')
+    #inputs scale
+    inputs=(inputs-para_min[:,:,:5])/(para_max[:,:,:5]-para_min[:,:,:5])
+    #predict
+    result=RNNobj.pred_fun(inputs,1)
+    #outputs scale and encode
+    turnangle=result[0][0,0,0]*(para_max[0,0,0]-para_min[0,0,0])+para_min[0,0,0]
+    turnangle=int((turnangle/180*pi+1)*10000)
+    brake=np.argmax(result[1])
+    if brake>=2:
+        U=int(U0*1000)
+        brake=75
+    elif brake==1:
+        U=int(1.5*1000)
+        brake=68
+    else:
+        U=int(1.5*1000)
+        brake=62
+    U="%04x"%U
+    turnangle="%04x"%turnangle
+    brake="%02x"%brake
+    tosend='ff000702'+U+turnangle+brake
+    #^ check
+    check=int(tosend[0:2],16)
+    for i in xrange(2,18,2):
+        check=check^int(tosend[i:i+2],16)
+    tosend=tosend+"%02x"%check
+    
+    return tosend
+        
 
 def main():
     length=1
@@ -227,14 +261,12 @@ def main():
     while(1):
         now=time.time()
         #print 'read serial'
-        a=ser.read(27)
-        #hexer=a.decode("hex") 
+        a=ser.read(27) 
         #print 'readout',hexer
-        hexShow(a)
-        a=np.array([[[ 0.44103992,  0.51292008,  0.5, 0.77564108,  0.79999977]]], dtype='float32')
-        result=RNNobj.pred_fun(a,1)
-        #print 'result:\n',result
-        tosend='2710'
+        a=hexShow(a)
+        tosend=genOutput(a,RNNobj,para_min,para_max)
+        #a=np.array([[[ 0.44103992,  0.51292008,  0.5, 0.77564108,  0.79999977]]], dtype='float32')
+        #tosend='2710'
         hexsend=tosend.decode('hex')
         ser.write(hexsend)
         print 1000*(time.time()-now),'ms'
