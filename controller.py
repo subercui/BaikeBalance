@@ -3,8 +3,9 @@ import theano, theano.tensor as T
 import numpy as np
 from matplotlib import pyplot as plt
 import theano_lstm
-import random,re,os,time,serial,math
+import random,re,os,time,serial,math,datetime
 import cPickle, gzip
+import math
 from theano_lstm import LSTM, RNN, StackedCells, Layer, create_optimization_updates
 pi=math.pi
 
@@ -142,7 +143,7 @@ class Model:
         self.pred_fun = theano.function(inputs=[self.x,self.steps],outputs =[self.predictions0,self.predictions1],allow_input_downcast=True)
                                  
     def create_training_function(self):
-        updates, gsums, xsums, lr, max_norm = create_optimization_updates(self.cost, self.params, lr=0.01, method="adagrad")#这一步Gradient Decent!!!!
+        updates, gsums, xsums, lr, max_norm = create_optimization_updates(self.cost, self.params, lr=0.01, method="adagrad")
         self.update_fun = theano.function(
             inputs=[self.x, self.target0,self.target1,self.steps],
             outputs=self.cost,
@@ -201,54 +202,92 @@ def hexShow(argv):
     return result
 
 def genOutput(a,RNNobj,para_min,para_max):
-    #检验起始FF
-    if int(a[0:2], 16)!=255:
-        raise Exception,'missing header ff'
-    if int(a[4:6], 16)!=23:
-        raise Exception,'wrong length flag'
-    if int(a[6:8], 16)!=2:
-        raise Exception,'wrong length flag'
-    #decode
-    speed=int(a[8:12], 16)#两字节车速
-    lean=int(a[12:16], 16)#
-    leanspeed=int(a[16:20], 16)
-    U0=int(a[40:44], 16)
-    turncontrol=int(a[44:48], 16)
-    speed=speed/1000.
-    lean=(lean/10000.-1.)*180/pi
-    leanspeed=leanspeed/10000.-1
-    U0=U0/1000.
-    turncontrol=(turncontrol/10000.-1.)*180/pi
-    inputs=np.array([[[lean,leanspeed,turncontrol,speed,U0]]], dtype='float32')
-    #inputs scale
-    inputs=(inputs-para_min[:,:,:5])/(para_max[:,:,:5]-para_min[:,:,:5])
-    #predict
-    result=RNNobj.pred_fun(inputs,1)
-    #outputs scale and encode
-    turnangle=result[0][0,0,0]*(para_max[0,0,0]-para_min[0,0,0])+para_min[0,0,0]
-    turnangle=int((turnangle/180*pi+1)*10000)
-    brake=np.argmax(result[1])
-    if brake>=2:
-        U=int(U0*1000)
-        brake=75
-    elif brake==1:
-        U=int(1.5*1000)
-        brake=68
+    if len(a)>=44:
+        content=[]
+        #检验起始FF
+        if int(a[0:2], 16)!=255:
+            print 'missing header ff'
+            #raise Exception,'missing header ff'
+        if int(a[4:6], 16)!=23:
+            print 'wrong length flag'
+            #raise Exception,'wrong length flag'
+        if int(a[6:8], 16)!=2:
+            print 'wrong length'
+            #raise Exception,'wrong length flag'
+        #decode
+        speed=int(a[8:12], 16)#两字节车速
+        lean=int(a[12:16], 16)#
+        leanspeed=int(a[16:20], 16)
+        U0=int(a[40:44], 16)
+        turncontrol=int(a[44:48], 16)
+        print '输入目标角度',turncontrol/10000.-1.
+        #f.write('输入目标角度'+str(turncontrol/10000.-1.)+'\n')
+        
+        speed=speed/1000.
+        print '输入倾斜角',lean/10000.-1.
+        #f.write('输入倾斜角'+str(lean/10000.-1.)+'\n')
+        lean=(lean/10000.-1.)*180/pi
+        leanspeed=leanspeed/10000.-1
+        U0=U0/1000.
+        turncontrol=(turncontrol/10000.-1.)*180/pi
+        content.append(str(time.time()))
+        content.append(str(speed))
+        content.append(str(lean))
+        content.append(str(leanspeed))
+        content.append(str(U0))
+        print '输入U0',U0
+        content.append(str(turncontrol))
+        inputs=np.array([[[lean,leanspeed,turncontrol,speed,U0]]], dtype='float32')
+        #inputs scale
+        inputs=(inputs-para_min[:,:,:5])/(para_max[:,:,:5]-para_min[:,:,:5])
+        #predict
+        result=RNNobj.pred_fun(inputs,1)
+        #outputs scale and encode
+        turnangle=result[0][0,0,0]*(para_max[0,0,0]-para_min[0,0,0])+para_min[0,0,0]
+        #输出手动非线性
+        #turnangle=turnangle+2.75
+        #turnangle=np.sign(turnangle)*6*np.sqrt(np.abs(turnangle))
+        if turnangle>0:
+            turnangle=min(turnangle,40.)
+        else:
+            turnangle=max(turnangle,-40.)
+        print '输出角度',turnangle
+        content.append(str(turnangle))
+        #f.write('输出角度'+str(turnangle/180*pi)+'\n')
+        turnangle=int((turnangle/180*pi+1)*10000)
+        brake=np.argmax(result[1])
+        if brake>=2:
+            U=int(U0*1000)
+            brake=75
+        elif brake==1:
+            U=int(1.5*1000)
+            brake=68
+        else:
+            U=int(1.5*1000)
+            brake=62
+        content.append(str(U/1000.))
+        content.append(str(brake))
+        U="%04x"%U
+        turnangle="%04x"%turnangle
+        brake="%02x"%brake
+        tosend='ff000702'+U+turnangle+brake
+        #^ check
+        check=int(tosend[0:2],16)
+        for i in xrange(2,18,2):
+            check=check^int(tosend[i:i+2],16)
+        tosend=tosend+"%02x"%check
+        genoutput(content)
     else:
-        U=int(1.5*1000)
-        brake=62
-    U="%04x"%U
-    turnangle="%04x"%turnangle
-    brake="%02x"%brake
-    tosend='ff000702'+U+turnangle+brake
-    #^ check
-    check=int(tosend[0:2],16)
-    for i in xrange(2,18,2):
-        check=check^int(tosend[i:i+2],16)
-    tosend=tosend+"%02x"%check
+        tosend=''
     
     return tosend
-        
+
+def genoutput(content):
+    outputline=''
+    for i in xrange(len(content)):
+        outputline=outputline+content[i]+' '
+    outputline=outputline+'\n'
+    f.write(outputline)
 
 def main():
     length=1
@@ -276,4 +315,6 @@ def main():
     ser.close()
     
 if __name__== '__main__':
+    f=open('log'+datetime.datetime.today().strftime("%y%m%d%H%M"),'wb')
     main()
+    f.close()

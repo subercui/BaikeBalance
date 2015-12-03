@@ -21,7 +21,7 @@ theano.config.scan.allow_gc='False'
 today=datetime.today()
 #super paramiters
 lengthlist=[1]
-n_epochs=300
+n_epochs=250
 n_hiddens=[100]
 alpha=100
 setbatch=100#确定
@@ -222,7 +222,7 @@ def filesinroot(dir,wildcard,recursion):
     return matchs
 parent_path = os.path.split(os.path.realpath(__file__))[0]
 path=parent_path+'/DataCut/'
-matchs=filesinroot(path,"track",0)
+matchs=filesinroot(path,"constant_1.9",0)
 
 def onecircle(setlength,setn_epochs):
     
@@ -254,6 +254,8 @@ def onecircle(setlength,setn_epochs):
     np.random.shuffle(data)
     paramin=np.amin(np.amin(data,axis=0),axis=0)[None,None,:]
     paramax=np.amax(np.amax(data,axis=0),axis=0)[None,None,:]
+    paramin[0,0,4]=0.
+    paramax[0,0,4]=1.
     data=(data-paramin)/(paramax-paramin)
     #categorize
     for i in range(data.shape[0]):
@@ -567,7 +569,7 @@ for s in range(6,20):
 ##############
 # SAVE MODEL #
 ##############
-savedir='/Users/subercui/Git/BaikeBalance/BikeModel.pkl.gz'
+savedir='/Users/subercui/Git/BaikeBalance/BikeModel1201.pkl.gz'
 save_file = gzip.open(savedir, 'wb')
 cPickle.dump(RNNobjlist[0].params, save_file, -1)
 cPickle.dump(paramin, save_file, -1)#scaling paras
