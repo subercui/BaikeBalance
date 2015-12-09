@@ -3,9 +3,8 @@ import theano, theano.tensor as T
 import numpy as np
 from matplotlib import pyplot as plt
 import theano_lstm
-import random,re,os,time,serial,math,datetime
+import random,re,os,time,serial,math
 import cPickle, gzip
-import math
 from theano_lstm import LSTM, RNN, StackedCells, Layer, create_optimization_updates
 pi=math.pi
 
@@ -143,7 +142,7 @@ class Model:
         self.pred_fun = theano.function(inputs=[self.x,self.steps],outputs =[self.predictions0,self.predictions1],allow_input_downcast=True)
                                  
     def create_training_function(self):
-        updates, gsums, xsums, lr, max_norm = create_optimization_updates(self.cost, self.params, lr=0.01, method="adagrad")
+        updates, gsums, xsums, lr, max_norm = create_optimization_updates(self.cost, self.params, lr=0.01, method="adagrad")#这一步Gradient Decent!!!!
         self.update_fun = theano.function(
             inputs=[self.x, self.target0,self.target1,self.steps],
             outputs=self.cost,
@@ -203,7 +202,6 @@ def hexShow(argv):
 
 def genOutput(a,RNNobj,para_min,para_max):
     if len(a)>=44:
-        content=[]
         #检验起始FF
         if int(a[0:2], 16)!=255:
             print 'missing header ff'
@@ -220,40 +218,18 @@ def genOutput(a,RNNobj,para_min,para_max):
         leanspeed=int(a[16:20], 16)
         U0=int(a[40:44], 16)
         turncontrol=int(a[44:48], 16)
-        print '输入目标角度',turncontrol/10000.-1.
-        #f.write('输入目标角度'+str(turncontrol/10000.-1.)+'\n')
-        
         speed=speed/1000.
-        print '输入倾斜角',lean/10000.-1.
-        #f.write('输入倾斜角'+str(lean/10000.-1.)+'\n')
         lean=(lean/10000.-1.)*180/pi
         leanspeed=leanspeed/10000.-1
         U0=U0/1000.
         turncontrol=(turncontrol/10000.-1.)*180/pi
-        content.append(str(time.time()))
-        content.append(str(speed))
-        content.append(str(lean))
-        content.append(str(leanspeed))
-        content.append(str(U0))
-        print '输入U0',U0
-        content.append(str(turncontrol))
         inputs=np.array([[[lean,leanspeed,turncontrol,speed,U0]]], dtype='float32')
         #inputs scale
         inputs=(inputs-para_min[:,:,:5])/(para_max[:,:,:5]-para_min[:,:,:5])
         #predict
         result=RNNobj.pred_fun(inputs,1)
         #outputs scale and encode
-        turnangle=result[0][0,0,0]*(para_max[0,0,5]-para_min[0,0,5])+para_min[0,0,5]
-        #输出手动非线性
-        #turnangle=turnangle+2.75
-        #turnangle=np.sign(turnangle)*6*np.sqrt(np.abs(turnangle))
-        if turnangle>0:
-            turnangle=min(turnangle,40.)
-        else:
-            turnangle=max(turnangle,-40.)
-        print '输出角度',turnangle
-        content.append(str(turnangle))
-        #f.write('输出角度'+str(turnangle/180*pi)+'\n')
+        turnangle=result[0][0,0,0]*(para_max[0,0,0]-para_min[0,0,0])+para_min[0,0,0]
         turnangle=int((turnangle/180*pi+1)*10000)
         brake=np.argmax(result[1])
         if brake>=2:
@@ -265,8 +241,6 @@ def genOutput(a,RNNobj,para_min,para_max):
         else:
             U=int(1.5*1000)
             brake=62
-        content.append(str(U/1000.))
-        content.append(str(brake))
         U="%04x"%U
         turnangle="%04x"%turnangle
         brake="%02x"%brake
@@ -276,45 +250,144 @@ def genOutput(a,RNNobj,para_min,para_max):
         for i in xrange(2,18,2):
             check=check^int(tosend[i:i+2],16)
         tosend=tosend+"%02x"%check
-        genoutput(content)
     else:
         tosend=''
     
-    return tosend
+    return tosend,result
+        
 
-def genoutput(content):
-    outputline=''
-    for i in xrange(len(content)):
-        outputline=outputline+content[i]+' '
-    outputline=outputline+'\n'
-    f.write(outputline)
 
-def main():
+    
+if __name__== '__main__':
     length=1
     n_hiddens=[100]
     RNNobj=init(length,n_hiddens)
     params,para_min,para_max=load_weight(RNNobj)
     for i in xrange(len(RNNobj.params)):
         RNNobj.params[i].set_value(params[i].eval())
-    ser = serial.Serial('/dev/ttyUSB0',115200,timeout=0)
+    '''#ser = serial.Serial('/dev/ttyUSB0',115200,timeout=0)
     while(1):
         now=time.time()
         #print 'read serial'
-        a=ser.read(27) 
+        #a=ser.read(27) 
         #print 'readout',hexer
-        a=hexShow(a)
-        tosend=genOutput(a,RNNobj,para_min,para_max)
+        #a=hexShow(a)
+        a='ff0017020000246127147c2fd239263e25824d7800002710000099'
+        tosend,result=genOutput(a,RNNobj,para_min,para_max)
         #a=np.array([[[ 0.44103992,  0.51292008,  0.5, 0.77564108,  0.79999977]]], dtype='float32')
         #tosend='2710'
         hexsend=tosend.decode('hex')
-        ser.write(hexsend)
-        print 1000*(time.time()-now),'ms'
+        #ser.write(hexsend)
+        #print 1000*(time.time()-now),'ms'
         while time.time()-now<0.01:
             continue
         print 1000*(time.time()-now),'ms'
-    ser.close()
+    #ser.close()'''
+
+
+import os
+def filesinroot(dir,wildcard,recursion):
+    matchs=[]
+    exts=wildcard.split()
+    for root,subdirs,files in os.walk(dir):
+        for name in files:
+            for ext in exts:
+                if(re.search(ext,name)):
+                    matchs.append(name)
+                    break
+        if(not recursion):
+            break
+    return matchs  
     
-if __name__== '__main__':
-    f=open('log'+datetime.datetime.today().strftime("%y%m%d%H%M"),'wb')
-    main()
-    f.close()
+parent_path = os.path.split(os.path.realpath(__file__))[0]
+path=parent_path+'/DataCut/'  
+theme="straight"
+matchs=filesinroot(path,theme,0)
+data=[]
+for entry in matchs:
+    print entry
+    data.append(np.loadtxt(path+entry,delimiter=','))
+    
+length=40
+expcnt=0
+for entry in data:
+    expcnt=expcnt+entry.shape[0]/length
+dataset=np.zeros((expcnt,length,8))  
+cnt=0 
+for entry in data:
+    print entry.shape
+    for i in range(entry.shape[0]/length):
+        dataset[cnt,:,:]=entry[i*length:(i+1)*length,:]
+        cnt=cnt+1
+data=dataset
+#f=gzip.open(parent_path+'/dataset.pkl.gz','rb')
+#data=cPickle.load(f)
+data=np.asarray(data,dtype='float32')
+np.random.shuffle(data)
+dataorigin=np.array(data)
+data=(data-para_min)/(para_max-para_min)
+#categorize
+for i in range(data.shape[0]):
+    for j in range(data.shape[1]):
+        if data[i,j,6]>0.9:
+            data[i,j,6]=2
+        elif data[i,j,6]>0.1 and data[i,j,6]<0.9:
+            data[i,j,6]=1
+        else:
+            data[i,j,6]=0
+    
+X,Y=np.split(data,[5],axis=2)
+for s in range(6,20):    
+    a0,a1=RNNobj.pred_fun(X[s:s+1],40)
+    plt.figure('curve-predict for '+theme+' curve index %d'%s,figsize=(14, 6))
+    plt.subplot(1, 2, 1)
+    plt.plot(X[s,:,0],'o-', label='lean angle', linewidth=2)
+    plt.plot(X[s,:,1],'o-', label='lean angle speed', linewidth=2)
+    plt.plot(X[s,:,2],'o-', label='turn control', linewidth=2)
+    plt.plot(X[s,:,3],'o-', label='real speed', linewidth=2)
+    plt.plot(X[s,:,4],'o-', label='speed voltage', linewidth=2)
+    plt.title('Input Sequence - Length 1 at Epoch: ')
+    plt.xlabel('Sequence')
+    plt.ylabel('Value')
+    plt.legend(loc='best', fancybox=True, framealpha=0.5)
+    plt.subplot(1, 2, 2)
+    plt.plot(a0[0,:]*(para_max[:,:,5]-para_min[:,:,5])+para_min[:,:,5],'^-', label='predict turn angle', linewidth=2)
+    #plt.plot(np.argmax(a1,axis=2).flatten(),'^-', label='predict brake', linewidth=2)
+    #plt.plot(a[0,:,2],'--', label='predict speed', linewidth=2)
+    plt.title('Real Sequence-Predict Sequence - Length 1 at Epoch: ')
+    plt.xlabel('Sequence')
+    plt.ylabel('Value')
+    plt.plot(dataorigin[s,:,5],'o-', label='real turn angle', linewidth=2)
+    #plt.plot(Y[s,:,1],'o-', label='real brake', linewidth=2)
+    #plt.plot(Y[s,:,2],'o-', label='real speed', linewidth=2)
+    plt.legend(loc='best', fancybox=True, framealpha=0.5)
+    plt.show()
+
+predict=RNNobj.pred_fun(X,40)[0][:,:,0]*(para_max[:,:,5]-para_min[:,:,5])+para_min[:,:,5]
+target=dataorigin[:,:,5]
+
+def showstats():
+    print 'predict mean',np.abs(predict).mean()
+    print 'predict max',np.abs(predict).max()
+    print 'target mean',np.abs(target).mean()
+    print 'target max',np.abs(target).max()
+    print 'minus mean',np.abs(predict-target).mean()
+    print 'minus max',np.abs(predict-target).max()
+
+def velocitytest():
+    test=np.array([[[ 0.55,  0.495,  0.5, 0.77564108,  0.]]], dtype='float32')
+    print test*(para_max[:,:,:5]-para_min[:,:,:5])+para_min[:,:,:5]
+    testUplus=np.array([[[ 0.44103992,  0.51292008,  0.5, 0.77564108,  0.79999977]]], dtype='float32')
+    testVplus=np.array([[[ 0.44103992,  0.51292008,  0.5, 0,  0.79999977]]], dtype='float32')
+    print 'test',(RNNobj.pred_fun(test,1)[0][:,:,0]*(para_max[:,:,5]-para_min[:,:,5])+para_min[:,:,5])[0,0]
+    print 'testUplus',(RNNobj.pred_fun(testUplus,1)[0][:,:,0]*(para_max[:,:,5]-para_min[:,:,5])+para_min[:,:,5])[0,0]
+    print 'testVplus',(RNNobj.pred_fun(testVplus,1)[0][:,:,0]*(para_max[:,:,5]-para_min[:,:,5])+para_min[:,:,5])[0,0]
+
+def rawinputtest():
+    test=np.array([[[-3.99351583206, 0.0026, 0.0, 0.0, 1.9]]],dtype='float32')
+    test=(test-para_min[:,:,:5])/(para_max[:,:,:5]-para_min[:,:,:5])
+    print 'test',test
+    toprint=RNNobj.pred_fun(test,1)[0][0,0,0]
+    print 'result',toprint
+    print toprint*(para_max[0,0,5]-para_min[0,0,5])+para_min[0,0,5]
+    
