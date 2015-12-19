@@ -54,7 +54,8 @@ def select(data):
     data=data[index]
     #结果6个数据范围(-7.7,7.7),(-10,10),1.9,(-0.03,0.03),(1.5,2.5),(-30,+30)
     return data
-    
+
+#加模拟数据    
 def add_simu_data(data,length,rangelow=[-0.372,-0.859,1.9,0.,1.9],rangehigh=[0.372,0.859,1.9,0.,2.1]):
     #simu
     array=np.random.random((length,len(rangelow)))
@@ -64,6 +65,8 @@ def add_simu_data(data,length,rangelow=[-0.372,-0.859,1.9,0.,1.9],rangehigh=[0.3
     #combine
     data=np.vstack((data,array))
     data=np.roll(data,array.shape[0]*4/5,axis=0)
+    #我一直改的上面这一句，发现4/5，比较好，本来是3/4感觉拿到数据容易过拟合，那边取了7/8
+    #其实就是那边后边0的部分留的太多，validation就会小很多，误以为好
     return data
     
 
@@ -110,13 +113,13 @@ def test_time_decay():
     return data 
 
 if __name__== '__main__':
-    '''matchs=filesinroot(path,".txt",0)
+    matchs=filesinroot(path,".txt",0)
     data=construct(matchs)
     data=select(data)
     data=add_simu_data(data,data.shape[0]/2)
     visualize(data)
-    savefile(data,parent_path+'/dataset/dataset'+tstr+'.pkl.gz')'''
+    savefile(data,parent_path+'/dataset/dataset'+tstr+'.pkl.gz')
     
-    #test decay mode
-    data=test_time_decay()
+    '''#test decay mode
+    data=test_time_decay()'''
     

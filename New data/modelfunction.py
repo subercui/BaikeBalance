@@ -100,6 +100,7 @@ if __name__=='__main__':
     #print X_train[:1024],y_train[:1024],X_valid[:1024],y_valid[:1024]
     #print X_train[:1024].mean(axis=0)
     train(X_train, y_train, X_valid, y_valid, MLPmodel, batch_size=128)
+    #下面这个函数里可以选择可视化哪个数据文件
     visual_test(MLPmodel)
     
 
