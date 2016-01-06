@@ -14,7 +14,7 @@ def init():
     if MLPmodel==None:
         MLPmodel=mf.build_mlp(5,1, 100,20)
         parent_path = os.path.split(os.path.realpath(__file__))[0]
-        MLPmodel.load_weights(parent_path+'/MLP_weightsBest.hdf5')
+        MLPmodel.load_weights(parent_path+'/MLP_weightsMultispeed151226.hdf5')
     
     return MLPmodel
 MLPmodel=init()
