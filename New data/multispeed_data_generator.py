@@ -10,6 +10,7 @@ from matplotlib import pyplot as plt
 import cPickle, gzip,os,re
 import load_test as lt
 import controlfunction as cf
+import data_generator as dg
 from datetime import datetime
 today=datetime.today()
 tstr=today.strftime('%y%m%d')
@@ -33,16 +34,16 @@ def construct(matchs):
     data=[]
     for entry in matchs:
         print entry
-        data.append(np.loadtxt(path+entry,delimiter=' '))
+        data.append(np.loadtxt(path+entry))
     data=np.vstack(data)
     #2.lean angle/degree 3.lean angle rate/degree 10.U0 11.turn angle in/rad 13.velocity 20.turn angle out
-    data=data[:,(2,3,10,11,13,20)]    
+    data=data[:,(1,2,9,10,12,18)]    
     return data
 
 def select(data):
     #1.筛选倾斜角较平稳的：（-7.7，+7.7）
-    index=np.nonzero(np.abs(data[:,0])<7.7)
-    data=data[index]
+    #index=np.nonzero(np.abs(data[:,0])<7.7)
+    #data=data[index]
     #2.筛选倾斜角速度在（-10.0，+10.0）
     index=np.nonzero(np.abs(data[:,1])<10.)
     data=data[index]
@@ -56,7 +57,7 @@ def select(data):
     return data
 
 #加模拟数据    
-def add_simu_data(data,length,rangelow=[-0.372,-0.859,1.9,0.,1.9],rangehigh=[0.372,0.859,1.9,0.,2.1]):
+def add_simu_data(data,length,rangelow=[-0.372,-0.859,1.9,0.,1.9],rangehigh=[0.372,0.859,2.2,0.,200]):
     #simu
     array=np.random.random((length,len(rangelow)))
     array=(np.array(rangehigh)-np.array(rangelow))*array+np.array(rangelow)
@@ -80,7 +81,7 @@ def visualize(data):
     n_sub=data.shape[1]
     rows=3
     lines=np.ceil(float(n_sub)/3)
-    plt.figure('plot data')
+    plt.figure('plot multispeed data')
     namelist=['lean angle(o)','lean angle rate(o/s)','U0',
     'turn angle in(rad)','velocity','turn angle out','nn turn angle out']
     for i in range(n_sub):
@@ -90,30 +91,21 @@ def visualize(data):
         plt.ylabel('Value')
         plt.legend(loc='best', fancybox=True, framealpha=0.5)
     plt.show()
-    
-    #附加画出vl和U0之间的关系
-    plt.figure('vl-U0')
-    plt.plot(data[:,2], label='U0', linewidth=1)
-    plt.plot(data[:,4], label='vl', linewidth=1)
-    plt.xlabel('index')
-    plt.ylabel('Value')
-    plt.legend(loc='best', fancybox=True, framealpha=0.5)
-    plt.show()
 
 #读取记录数据，调查控制信号延迟    
-def test_time_decay():
+def test_time_decay(path='/Users/subercui/Git/BaikeBalance/New data/nn_test/NNcontrol_2015-12-20_11-39-36.txt'):
     #data=np.loadtxt('/Volumes/NO NAME/nn_test/test_file_2015-12-5_17-36-33.txt',delimiter=' ')
-    data=np.loadtxt('/Users/subercui/Git/BaikeBalance/New data/nn_test/NNcontrol_2015-12-20_11-39-36.txt')
-    #2.lean angle/degree 3.lean angle rate/degree 10.U0 11.turn angle in/rad 13.velocity 20.turn angle out 21.nn turn angle out
-    data=data[:,(1,2,3,10,11,13,20,21)]
+    data=np.loadtxt(path)
+    #2.lean angle/degree 3.lean angle rate/degree 10.U0 11.turn angle in/rad 13.velocity 18.turn angle out 19.nn turn angle out
+    data=data[:,(1,2,9,10,12,18,19)]
     #data=select(data)
     #visualize(data)
-    predictions=lt.test(data[:,1:6])
+    predictions=lt.test(data[:,0:5])
     plt.figure('test decay')
-    plt.plot(data[:,-2],label='turn angle out')
-    plt.plot(data[:,-1],label='network out')
-    plt.plot(-data[:,1],label='steering filted')
-    #plt.plot(predictions,label='offline network out')
+    plt.plot(data[200:,-2],label='turn angle out')
+    plt.plot(data[200:,-1],label='network out')
+    #plt.plot(-data[:,1],label='steering filted')
+    plt.plot(predictions[200:],label='offline network out')
     plt.grid()
     plt.legend(loc='best', fancybox=True, framealpha=0.5)
     plt.xlabel('time(10ms)')
@@ -123,13 +115,23 @@ def test_time_decay():
     return data 
 
 if __name__== '__main__':
-    '''matchs=filesinroot(path,"test",0)
-    data=construct(matchs)
-    data=select(data)
-    data=add_simu_data(data,data.shape[0]/2)
-    visualize(data)
-    savefile(data,parent_path+'/dataset/dataset'+tstr+'.pkl.gz')'''
+    '''
+    matchs=filesinroot(path,"multispeed",0)
+    multispeed_data=construct(matchs)
+    multispeed_data=select(multispeed_data)
+    multispeed_data=add_simu_data(multispeed_data,multispeed_data.shape[0]/2)
+    visualize(multispeed_data)
+    savefile(multispeed_data,parent_path+'/dataset/multispeed_dataset'+tstr+'.pkl.gz')
     
+    matchs=filesinroot(path,"test",0)
+    data=dg.construct(matchs)
+    data=dg.select(data)
+    data=dg.add_simu_data(data,data.shape[0]/2)
+    data=np.vstack((multispeed_data,data))
+    dg.visualize(data)
+    savefile(multispeed_data,parent_path+'/dataset/dataset'+tstr+'.pkl.gz')
+    
+    '''
     #test decay mode
-    data=test_time_decay()
+    data=test_time_decay(path='/Users/subercui/Git/BaikeBalance/NN30/test_file_2015-12-31_10-52-9.txt')
     
