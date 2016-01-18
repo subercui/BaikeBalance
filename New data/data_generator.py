@@ -56,7 +56,7 @@ def select(data):
     return data
 
 #加模拟数据    
-def add_simu_data(data,length,rangelow=[-0.372,-0.859,1.9,0.,1.9],rangehigh=[0.372,0.859,1.9,0.,2.1]):
+def add_simu_data(data,length,rangelow=[-0.372,-0.859,1.9,0.,1.9],rangehigh=[0.372,0.859,2.0,0.,2.1]):
     #simu
     array=np.random.random((length,len(rangelow)))
     array=(np.array(rangehigh)-np.array(rangelow))*array+np.array(rangelow)
@@ -123,13 +123,14 @@ def test_time_decay():
     return data 
 
 if __name__== '__main__':
-    '''matchs=filesinroot(path,"test",0)
+    matchs=filesinroot(path,"U1.9_2015-12-4_13",0)
     data=construct(matchs)
     data=select(data)
-    data=add_simu_data(data,data.shape[0]/2)
+    #data=add_simu_data(data,data.shape[0]/2)
     visualize(data)
-    savefile(data,parent_path+'/dataset/dataset'+tstr+'.pkl.gz')'''
+    savefile(data,parent_path+'/dataset/dataset'+tstr+'.pkl.gz')
+    '''
     
     #test decay mode
-    data=test_time_decay()
+    data=test_time_decay()'''
     

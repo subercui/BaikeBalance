@@ -8,16 +8,21 @@ import cPickle, gzip,os
 import numpy as np
 MLPmodel = None
 
-def init():
+def init(weight='MLP_weightsBest.hdf5'):
     print '... building the model'
     global MLPmodel
     if MLPmodel==None:
         MLPmodel=mf.build_mlp(5,1, 100,20)
+        MLPmodel.path=weight
         parent_path = os.path.split(os.path.realpath(__file__))[0]
-        MLPmodel.load_weights(parent_path+'/MLP_weightsMultispeed151226.hdf5')
+        MLPmodel.load_weights(parent_path+'/'+weight)
+    if not MLPmodel.path==weight:
+        MLPmodel=mf.build_mlp(5,1, 100,20)
+        MLPmodel.path=weight
+        parent_path = os.path.split(os.path.realpath(__file__))[0]
+        MLPmodel.load_weights(parent_path+'/'+weight)
     
     return MLPmodel
-MLPmodel=init()
     
 
 def mean_square_error(predictions, targets):
@@ -29,8 +34,9 @@ def absolute_percent_error(predictions, targets, targets_mean):
 def absolute_error(predictions, targets):
     return np.abs(predictions - targets).mean(axis=0)
     
-def test(array):
+def test(array,weightfile='MLP_weightsMultispeed151226.hdf5'):
     #array=np.array([[ 0.09167325, 0.006      ,0,0,0]])
+    MLPmodel=init(weight=weightfile)
     array=mf.normalize(array)
     return MLPmodel.predict(array,array.shape[0])
     

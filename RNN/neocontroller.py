@@ -84,7 +84,7 @@ def genOutput(a,RNNobj):
         print '输入倾斜角',lean/10000.-1.
         #f.write('输入倾斜角'+str(lean/10000.-1.)+'\n')
         lean=(lean/10000.-1.)*180/pi
-        leanspeed=leanspeed/10000.-1
+        leanspeed=(leanspeed/10000.-1)*180/pi
         U0=U0/1000.
         turncontrol=(turncontrol/10000.-1.)#rad
         content.append(str(time.time()))

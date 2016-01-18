@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+#!!!!之后一定把stateful用起来，
+#用stateful就要注意batch，可能batch等于1，
+#还要注意什么时候断句并reset
 '''
 build model funtion,and train function 
 author: CUI HAOTIAN
@@ -14,6 +17,7 @@ tstr=today.strftime('%y%m%d')
 #from keras.datasets import mnist
 from keras.models import Sequential, model_from_yaml
 from keras.layers.core import Dense, TimeDistributedDense, Dropout, Activation
+#import ipdb; ipdb.set_trace() # BREAKPOINT
 from keras.layers.recurrent import LSTM, SimpleRNN
 from keras.optimizers import SGD, Adam, RMSprop
 from keras.utils import np_utils
@@ -22,13 +26,32 @@ from keras.initializations import uniform
 from keras.regularizers import l2
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 
-def build_mlp(in_dim, out_dim, h0_dim, h1_dim=None):
-    model = Sequential() 
-    model.add(Dense(h0_dim, activation='relu',input_dim=in_dim))  
+def load_weights(filepath):
+    '''Load all layer weights from a HDF5 save file.
+    '''
+    import h5py
+    f = h5py.File(filepath)
+    weights=[]
+    for k in range(f.attrs['nb_layers']):
+        # This method does not make use of Sequential.set_weights()
+        # for backwards compatibility.
+        g = f['layer_{}'.format(k)]
+        for p in range(g.attrs['nb_params']):
+            weights.append(np.array(g['param_{}'.format(p)],dtype='float32'))
+    f.close()
+    return weights
+    
+def build_rnn(steps,in_dim, out_dim, h0_dim, h1_dim=None, layer_type=SimpleRNN, return_sequences=True):
+    model = Sequential()  
+    model.add(layer_type(h0_dim, activation='relu',\
+    input_shape=(steps, in_dim), return_sequences=return_sequences))  
     if h1_dim is not None:
-        model.add(Dense(h1_dim,activation='relu'))
-    #model.add(Dense(out_dim,W_regularizer=l2(0.0005)))
-    model.add(Dense(out_dim))  
+        model.add(TimeDistributedDense(h1_dim))
+        #model.add(layer_type(h1_dim, weights=,activation='relu',return_sequences=return_sequences))
+    if return_sequences:
+        model.add(TimeDistributedDense(out_dim))
+    else:
+        model.add(Dense(out_dim))  
     model.add(Activation("linear"))  
     model.compile(loss="mse", optimizer="rmsprop")  
     return model
@@ -67,7 +90,7 @@ def normalize(X_train):
     
 def test(array,model):
     array=normalize(array)
-    return model.predict(array,array.shape[0])
+    return model.predict(array[None,:],array.shape[0])[0,:,0]
     
 def visual_test(model,sequence=None):
     parent_path=os.path.split(os.path.realpath(__file__))[0]
@@ -99,14 +122,17 @@ if __name__=='__main__':
     data = cPickle.load(f)
     f.close()
     X_train, y_train, X_valid, y_valid = build_mlp_dataset(data)
-    MLPmodel=build_mlp(X_train.shape[-1] ,y_train.shape[-1], 100,20)
+    RNNmodel=build_rnn(40,X_train.shape[-1] ,y_train.shape[-1], 100,20)
+    
     #是否加载pretrain model
-    MLPmodel.load_weights(parent_path+'/MLP_weightsBest.hdf5')
+    preweights=load_weights(parent_path+'/MLP_weightsMultispeed151226.hdf5')
+    preweights.insert(1,np.zeros((100,100),dtype='float32'))
+    RNNmodel.set_weights(preweights)
     #print X_train[:1024],y_train[:1024],X_valid[:1024],y_valid[:1024]
     #print X_train[:1024].mean(axis=0)
-    train(X_train, y_train, X_valid, y_valid, MLPmodel, batch_size=128)
+    #train(X_train, y_train, X_valid, y_valid, MLPmodel, batch_size=128)
     #下面这个函数里可以选择可视化哪个数据文件
-    visual_test(MLPmodel)
+    visual_test(RNNmodel)
     
 
 '''只是改变了训练数据的比例，就得到了一组更好的模型'''    
