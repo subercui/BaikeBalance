@@ -11,8 +11,11 @@ import numpy as np
 import cPickle,gzip,os 
 from datetime import datetime
 from matplotlib import pyplot as plt
+from makernnset import makernnset
+from utils import loadgz
 today=datetime.today()
 tstr=today.strftime('%y%m%d')
+del today
 
 #from keras.datasets import mnist
 from keras.models import Sequential, model_from_yaml
@@ -58,7 +61,7 @@ def build_rnn(steps,in_dim, out_dim, h0_dim, h1_dim=None, layer_type=SimpleRNN, 
     
 def train(X_train, y_train, X_test, y_test, model, batch_size=128, nb_epoch=300):
     early_stopping = EarlyStopping(monitor='val_loss', patience=100)
-    path=parent_path+"/MLP_weights"+tstr+".hdf5"
+    path=parent_path+"/RNN_weights"+tstr+".hdf5"
     checkpointer = ModelCheckpoint(filepath=path, verbose=1, save_best_only=True)
     model.fit(X_train, y_train, 
               batch_size=batch_size, 
@@ -67,15 +70,12 @@ def train(X_train, y_train, X_test, y_test, model, batch_size=128, nb_epoch=300)
               verbose=2, 
               validation_data=(X_test, y_test), 
               callbacks=[early_stopping, checkpointer])
-
-def build_mlp_dataset(data, pred_range=[2,42], valid_pct=1./8):
-    #np.random.shuffle(data)
-    train_pct = 1. - valid_pct
-    train_data = data[:data.shape[0]*train_pct]
-    valid_data = data[data.shape[0]*train_pct:]
-    print "trainset.shape, testset.shape =", train_data.shape, valid_data.shape
-    X_train, y_train = np.hsplit(train_data,[5])
-    X_valid, y_valid = np.hsplit(valid_data,[5])
+    
+def build_rnn_dataset(steps):
+    rnntrain,rnntest=makernnset(steps)
+    print "trainset.shape, testset.shape =", rnntrain.shape, rnntest.shape
+    X_train, y_train = np.dsplit(rnntrain,[5])
+    X_valid, y_valid = np.dsplit(rnntest,[5])
                                            
     X_train = normalize(X_train)
     X_valid = normalize(X_valid)
@@ -83,9 +83,13 @@ def build_mlp_dataset(data, pred_range=[2,42], valid_pct=1./8):
     return X_train, y_train, X_valid, y_valid
     
 def normalize(X_train):
-    X_train = X_train-np.array([[0.,0.,1.9,0.,2.]])
-    X_train = X_train/np.array([[7.7,10.0,1,0.03,0.5]])
-
+    assert X_train.ndim in [2,3], 'X_train dim wrong'
+    if X_train.ndim==2:
+        X_train = X_train-np.array([[0.,0.,1.9,0.,2.]])
+        X_train = X_train/np.array([[7.7,10.0,1,0.03,0.5]])
+    if X_train.ndim==3:
+        X_train = X_train-np.array([[[0.,0.,1.9,0.,2.]]])
+        X_train = X_train/np.array([[[7.7,10.0,1,0.03,0.5]]])
     return X_train.astype('float32')
     
 def test(array,model):
@@ -118,30 +122,18 @@ def convert_norm(X):
 
 if __name__=='__main__':
     parent_path = os.path.split(os.path.realpath(__file__))[0]
-    f = gzip.open(parent_path+'/dataset/multispeed_dataset151226.pkl.gz', 'rb')  
-    data = cPickle.load(f)
-    f.close()
-    X_train, y_train, X_valid, y_valid = build_mlp_dataset(data)
+    X_train, y_train, X_valid, y_valid = build_rnn_dataset(5)
     RNNmodel=build_rnn(40,X_train.shape[-1] ,y_train.shape[-1], 100,20)
     
     #是否加载pretrain model
     preweights=load_weights(parent_path+'/MLP_weightsMultispeed151226.hdf5')
-    preweights.insert(1,np.zeros((100,100),dtype='float32'))
+    preweights.insert(1,np.zeros((100,100),dtype='float32'))#recurrent weight
     RNNmodel.set_weights(preweights)
-    #print X_train[:1024],y_train[:1024],X_valid[:1024],y_valid[:1024]
-    #print X_train[:1024].mean(axis=0)
     #train(X_train, y_train, X_valid, y_valid, MLPmodel, batch_size=128)
     #下面这个函数里可以选择可视化哪个数据文件
-    visual_test(RNNmodel)
+    testseq=loadgz('/Users/subercui/Git/BaikeBalance/RNN/dataset/testset.pkl.gz')
+    visual_test(RNNmodel,testseq)
     
 
-'''只是改变了训练数据的比例，就得到了一组更好的模型'''    
-'''[[-1.1058085   0.0181      0.          0.          1.89999998]] :0.342671066523
-
-[[ -3.60963404e-01   1.79999997e-03   0.00000000e+00   0.00000000e+00
-    1.89999998e+00]] :
-    
-[[ -8.02140906e-02   1.99999995e-04   1.89999998e+00   0.00000000e+00
-    0.00000000e+00]]'''
-
+'''可以调steps'''    
 

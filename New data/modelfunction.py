@@ -8,6 +8,7 @@ import numpy as np
 import cPickle,gzip,os 
 from datetime import datetime
 from matplotlib import pyplot as plt
+from utils import loadgz,add_simu_data
 today=datetime.today()
 tstr=today.strftime('%y%m%d')
 
@@ -45,11 +46,16 @@ def train(X_train, y_train, X_test, y_test, model, batch_size=128, nb_epoch=300)
               validation_data=(X_test, y_test), 
               callbacks=[early_stopping, checkpointer])
 
-def build_mlp_dataset(data, pred_range=[2,42], valid_pct=1./8):
-    #np.random.shuffle(data)
-    train_pct = 1. - valid_pct
-    train_data = data[:data.shape[0]*train_pct]
-    valid_data = data[data.shape[0]*train_pct:]
+def build_mlp_dataset(data, test=None,pred_range=[2,42], valid_pct=1./8):
+    if test==None:
+        #np.random.shuffle(data)
+        train_pct = 1. - valid_pct
+        train_data = data[:data.shape[0]*train_pct]
+        valid_data = data[data.shape[0]*train_pct:]
+    else:
+        train_data = data
+        valid_data = test
+        
     print "trainset.shape, testset.shape =", train_data.shape, valid_data.shape
     X_train, y_train = np.hsplit(train_data,[5])
     X_valid, y_valid = np.hsplit(valid_data,[5])
@@ -95,18 +101,19 @@ def convert_norm(X):
 
 if __name__=='__main__':
     parent_path = os.path.split(os.path.realpath(__file__))[0]
-    f = gzip.open(parent_path+'/dataset/multispeed_dataset151226.pkl.gz', 'rb')  
-    data = cPickle.load(f)
-    f.close()
-    X_train, y_train, X_valid, y_valid = build_mlp_dataset(data)
+    trainset=loadgz(parent_path+'/dataset/trainset.pkl.gz')
+    testset=loadgz(parent_path+'/dataset/testset.pkl.gz')
+    trainset=add_simu_data(trainset,trainset.shape[0]/6)
+    testset=add_simu_data(testset,testset.shape[0]/6)
+    X_train, y_train, X_valid, y_valid = build_mlp_dataset(data=trainset,test=testset)
     MLPmodel=build_mlp(X_train.shape[-1] ,y_train.shape[-1], 100,20)
     #是否加载pretrain model
-    MLPmodel.load_weights(parent_path+'/MLP_weightsBest.hdf5')
+    #MLPmodel.load_weights(parent_path+'/MLP_weightsBest.hdf5')
     #print X_train[:1024],y_train[:1024],X_valid[:1024],y_valid[:1024]
     #print X_train[:1024].mean(axis=0)
     train(X_train, y_train, X_valid, y_valid, MLPmodel, batch_size=128)
     #下面这个函数里可以选择可视化哪个数据文件
-    visual_test(MLPmodel)
+    visual_test(MLPmodel,sequence=testset)
     
 
 '''只是改变了训练数据的比例，就得到了一组更好的模型'''    

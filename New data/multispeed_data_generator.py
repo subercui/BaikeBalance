@@ -104,14 +104,14 @@ def test_time_decay(path='/Users/subercui/Git/BaikeBalance/New data/nn_test/NNco
     data=data[:,(1,2,9,10,12,18,19)]
     #data=select(data)
     #visualize(data)
-    predictions=lt.test(data[:,0:5],weightfile='MLP_weightsBest.hdf5')
-    predictions2=lt.test(data[:,0:5],weightfile='MLP_weightsMultispeed151226.hdf5')
+    #predictions=lt.test(data[:,0:5],weightfile='MLP_weightsBest.hdf5')
+    predictions2=lt.test(data[:,0:5],weightfile='MLP_weightsMultispeed160118.hdf5')
     #simupred=cf.control_func(data[:,0:5],data[:,0:5].shape[0])
     plt.figure('test decay')
     plt.plot(data[:,-2],label='turn angle out')
     plt.plot(data[:,-1],label='network out')
     #plt.plot(simupred[:],label='simulation out')
-    plt.plot(predictions[:],label='offline network out')
+    #plt.plot(predictions[:],label='offline network out')
     plt.plot(predictions2[:],label='offline mutispeed')
     plt.grid()
     plt.legend(loc='best', fancybox=True, framealpha=0.5)
@@ -122,14 +122,14 @@ def test_time_decay(path='/Users/subercui/Git/BaikeBalance/New data/nn_test/NNco
     return data 
 
 if __name__== '__main__':
-
+    '''
     matchs=filesinroot(path,"multispeed",0)
     multispeed_data=construct(matchs)
     multispeed_data=select(multispeed_data)
     #multispeed_data=add_simu_data(multispeed_data,multispeed_data.shape[0]/2)
     visualize(multispeed_data)
     savefile(multispeed_data,parent_path+'/dataset/multispeed_dataset'+tstr+'.pkl.gz')
-
+    '''
     '''
     matchs=filesinroot(path,"test",0)
     data=dg.construct(matchs)
@@ -139,7 +139,7 @@ if __name__== '__main__':
     dg.visualize(data)
     savefile(multispeed_data,parent_path+'/dataset/dataset'+tstr+'.pkl.gz')
     '''
-    '''
+    
     #test decay mode
-    data=test_time_decay(path='/Users/subercui/Git/BaikeBalance/New data/nn_test/U2.0_2016-1-16_11-15-8.txt')
-    utils.visualize(data)'''
+    data=test_time_decay(path='/Volumes/NO NAME/nn_test/test_file_2016-1-25_16-27-57.txt')
+    utils.visualize(data)
