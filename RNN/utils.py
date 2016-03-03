@@ -82,6 +82,35 @@ def makedatas(*files):
     for f in files:
         data.append(np.loadtxt(f))
     return data
+    
+'''
+def visual():
+    plt.figure('Steering Angle Output In A Time Sequence')
+    plt.title('Steering Angle Output In A Time Sequence',fontsize=24)
+    #plt.plot(targets[6500:7500],label='PID controller')
+    plt.plot(predwithoutR[500:1500],'g',label='RNN without R')
+    #plt.plot(3.*sequence[:,1],label='lean angle rate')
+    plt.plot(predwithR[500:1500],'b',label='RNN with R',linewidth=2)
+    plt.grid()
+    plt.legend(loc='best', fancybox=True, framealpha=0.5)
+    plt.xlabel('time(20ms)',fontsize=18)
+    plt.ylabel('steering angle (degree)',fontsize=18)
+    plt.show()
+    
+def visual():
+    plt.figure('FFT of Steering Angle Output')
+    plt.title('FFT of Steering Angle Output')
+    #plt.plot(targets[6500:7500],label='PID controller')
+    plt.plot(np.abs(predwithoutR[500:1500]-np.roll(predwithoutR[500:1500],1)),label='RNN without R')
+    #plt.plot(3.*sequence[:,1],label='lean angle rate')
+    plt.plot(np.abs(predwithR[500:1500]-np.roll(predwithR[500:1500],1)),label='RNN with R')
+    plt.grid()
+    plt.legend(loc='best', fancybox=True, framealpha=0.5)
+    plt.xlabel('time(20ms)')
+    plt.ylabel('steering angle (degree)')
+    plt.show()
+'''    
+    
 if __name__== '__main__':
     parent_path = os.path.split(os.path.realpath(__file__))[0]
     data=[]    

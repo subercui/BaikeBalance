@@ -6,6 +6,7 @@ date:2015.12.05
 import modelfunction as mf
 import cPickle, gzip,os
 import numpy as np
+from utils import loadgz
 MLPmodel = None
 
 def init(weight='MLP_weightsBest.hdf5'):
@@ -44,5 +45,6 @@ if __name__=='__main__':
     parent_path = os.path.split(os.path.realpath(__file__))[0]
     array=np.array([[0.,20.,1.9,0.,2.0]])
     print test(array)
-    mf.visual_test(MLPmodel)    
+    testset=loadgz(parent_path+'/dataset/testset.pkl.gz')
+    mf.visual_test(MLPmodel,sequence=testset[6000:8000])    
         

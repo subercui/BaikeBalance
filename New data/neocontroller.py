@@ -17,7 +17,7 @@ def init(length,n_hiddens):
     ######################
     print '... building the model'
     MLPmodel=build_mlp(5,1, 100,20)
-    MLPmodel.load_weights('MLP_weightsBest.hdf5')
+    MLPmodel.load_weights('MLP_weightsMultispeed160118.hdf5')
     
     return MLPmodel
     

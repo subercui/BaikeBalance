@@ -9,6 +9,7 @@ date:2015.12.05
 '''
 import numpy as np
 import cPickle,gzip,os 
+from theano import tensor as T
 from datetime import datetime
 from matplotlib import pyplot as plt
 from makernnset import makernnset
@@ -44,10 +45,10 @@ def load_weights(filepath):
     f.close()
     return weights
     
-def build_rnn(steps,in_dim, out_dim, h0_dim, h1_dim=None, layer_type=SimpleRNN, return_sequences=True):
+def build_rnn(in_dim, out_dim, h0_dim, h1_dim=None, layer_type=SimpleRNN, return_sequences=True):
     model = Sequential()  
     model.add(layer_type(h0_dim, activation='relu',\
-    input_shape=(steps, in_dim), return_sequences=return_sequences))  
+    input_dim=in_dim, return_sequences=return_sequences))  
     if h1_dim is not None:
         model.add(TimeDistributedDense(h1_dim))
         #model.add(layer_type(h1_dim, weights=,activation='relu',return_sequences=return_sequences))
@@ -55,11 +56,15 @@ def build_rnn(steps,in_dim, out_dim, h0_dim, h1_dim=None, layer_type=SimpleRNN, 
         model.add(TimeDistributedDense(out_dim))
     else:
         model.add(Dense(out_dim))  
-    model.add(Activation("linear"))  
-    model.compile(loss="mse", optimizer="rmsprop")  
+    model.add(Activation("linear"))
+    def mycost(y_true, y_pred):
+        y_roll=T.roll(y_pred,1,axis=1)
+        y_roll=T.set_subtensor(y_roll[:,0,:],y_pred[:,0,:])
+        return T.mean(T.square(y_pred - y_true), axis=-1)+ 10*T.mean(T.square(y_pred - y_roll), axis=-1) 
+    model.compile(loss=mycost, optimizer="rmsprop")  
     return model
     
-def train(X_train, y_train, X_test, y_test, model, batch_size=128, nb_epoch=300):
+def train(X_train, y_train, X_test, y_test, model, batch_size=128, nb_epoch=50):
     early_stopping = EarlyStopping(monitor='val_loss', patience=100)
     path=parent_path+"/RNN_weights"+tstr+".hdf5"
     checkpointer = ModelCheckpoint(filepath=path, verbose=1, save_best_only=True)
@@ -105,16 +110,18 @@ def visual_test(model,sequence=None):
     targets=sequence[:,5]
     predictions=test(sequence[:,:5],model)
     plt.figure('test')
+    plt.title('test')
     plt.plot(targets,label='turn angle out')
     #plt.plot(3.*sequence[:,0],label='lean angle')
     #plt.plot(3.*sequence[:,1],label='lean angle rate')
     plt.plot(predictions,label='offline network out')
     plt.grid()
     plt.legend(loc='best', fancybox=True, framealpha=0.5)
-    plt.xlabel('time(10ms)')
-    plt.ylabel('Value')
+    plt.xlabel('time(20ms)')
+    plt.ylabel('steering angle (degree)')
     plt.show()
     print 'abs error',np.mean(np.abs(predictions-targets))
+    return predictions
         
     
 def convert_norm(X):
@@ -122,18 +129,20 @@ def convert_norm(X):
 
 if __name__=='__main__':
     parent_path = os.path.split(os.path.realpath(__file__))[0]
-    X_train, y_train, X_valid, y_valid = build_rnn_dataset(5)
-    RNNmodel=build_rnn(40,X_train.shape[-1] ,y_train.shape[-1], 100,20)
+    X_train, y_train, X_valid, y_valid = build_rnn_dataset(10)
+    RNNmodel=build_rnn(X_train.shape[-1] ,y_train.shape[-1], 100,20)
     
     #是否加载pretrain model
-    preweights=load_weights(parent_path+'/MLP_weightsMultispeed151226.hdf5')
-    preweights.insert(1,np.zeros((100,100),dtype='float32'))#recurrent weight
-    RNNmodel.set_weights(preweights)
-    #train(X_train, y_train, X_valid, y_valid, MLPmodel, batch_size=128)
+    #preweights=load_weights(parent_path+'/MLP_weightsMultispeed151226.hdf5')
+    #preweights.insert(1,np.zeros((100,100),dtype='float32'))#recurrent weight
+    #RNNmodel.set_weights(preweights)
+    RNNmodel.load_weights(parent_path+'/RNN_weights10REGU1.0.hdf5')
+    #train(X_train, y_train, X_valid, y_valid, RNNmodel, batch_size=128)
     #下面这个函数里可以选择可视化哪个数据文件
     testseq=loadgz('/Users/subercui/Git/BaikeBalance/RNN/dataset/testset.pkl.gz')
-    visual_test(RNNmodel,testseq)
+    predictions=visual_test(RNNmodel,testseq[6000:8000])
+    #visual_test(RNNmodel,testseq)
     
 
-'''可以调steps'''    
+'''可以调steps,optimizer'''    
 

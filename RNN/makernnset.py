@@ -8,7 +8,7 @@ def sigment(data,thr):
     #plt.plot(tmp)
     #plt.show()
     starts=np.nonzero(tmp>thr)
-    print starts
+    print 'data segments',starts
     #本帧和上一帧差值过大，这应该是另一个sequence的起点
     return starts
 
@@ -19,7 +19,7 @@ def makedata(data,starts,steps):
     rnndata=[]
     for i in range(len(starts)-1):
         period=data[starts[i]:starts[i+1],:]
-        print 'iter #',i
+        #print 'iter #',i
         for idx in range(period.shape[0]-steps):
             rnndata.append(period[idx:idx+steps,:])
     rnndata=np.array(rnndata)
