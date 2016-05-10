@@ -9,34 +9,15 @@ import math
 from modelfunction import *
 
 pi=math.pi
-parent_path = os.path.split(os.path.realpath(__file__))[0]
 
-def build_stateful_rnn(in_dim, out_dim, h0_dim, h1_dim=None, layer_type=SimpleRNN, return_sequences=True):
-    model = Sequential()  
-    model.add(layer_type(h0_dim, activation='relu',\
-    input_dim=in_dim, return_sequences=return_sequences,stateful=True,batch_input_shape=(1,1,in_dim)))  
-    if h1_dim is not None:
-        model.add(TimeDistributedDense(h1_dim))
-        #model.add(layer_type(h1_dim, weights=,activation='relu',return_sequences=return_sequences))
-    if return_sequences:
-        model.add(TimeDistributedDense(out_dim))
-    else:
-        model.add(Dense(out_dim))  
-    model.add(Activation("linear"))
-    def mycost(y_true, y_pred):
-        y_roll=T.roll(y_pred,1,axis=1)
-        y_roll=T.set_subtensor(y_roll[:,0,:],y_pred[:,0,:])
-        return T.mean(T.square(y_pred - y_true), axis=-1)+ 10*T.mean(T.square(y_pred - y_roll), axis=-1) 
-    model.compile(loss=mycost, optimizer="rmsprop")  
-    return model
 
 def init(length,n_hiddens):
     ######################
     # BUILD ACTUAL MODEL #
     ######################
     print '... building the model'
-    MLPmodel=build_stateful_rnn(5 ,1, 100,20)
-    MLPmodel.load_weights(parent_path+'/RNN_weights2REGU0.54.hdf5')
+    MLPmodel=build_mlp(5,1, 100,20)
+    MLPmodel.load_weights('MLP_weightsBest.hdf5')
     
     return MLPmodel
     
@@ -103,7 +84,7 @@ def genOutput(a,RNNobj):
         print '输入倾斜角',lean/10000.-1.
         #f.write('输入倾斜角'+str(lean/10000.-1.)+'\n')
         lean=(lean/10000.-1.)*180/pi
-        leanspeed=(leanspeed/10000.-1)*180/pi
+        leanspeed=leanspeed/10000.-1
         U0=U0/1000.
         turncontrol=(turncontrol/10000.-1.)#rad
         content.append(str(time.time()))
@@ -113,15 +94,14 @@ def genOutput(a,RNNobj):
         content.append(str(U0))
         print '输入U0',U0
         content.append(str(turncontrol))
-        inputs=np.array([[[lean,leanspeed,U0,turncontrol,speed]]], dtype='float32')
+        inputs=np.array([[lean,leanspeed,U0,turncontrol,speed]], dtype='float32')
         print inputs
         #inputs scale
-        inputs = inputs-np.array([[[0.,0.,1.9,0.,2.]]])
-        inputs = inputs/np.array([[[7.7,10.0,1,0.03,0.5]]])
+        inputs = inputs-np.array([[0.,0.,1.9,0.,2.]])
+        inputs = inputs/np.array([[7.7,10.0,1,0.03,0.5]])
         #predict
-        print 'network input',inputs,inputs.shape
         result=RNNobj.predict(inputs,1)
-        turnangle=result[0,0,0]
+        turnangle=result[0,0]
         #outputs scale and encode
         #turnangle=result[0][0,0,0]*(para_max[0,0,5]-para_min[0,0,5])+para_min[0,0,5]
         #输出手动非线性

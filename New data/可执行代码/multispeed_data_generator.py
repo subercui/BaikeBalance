@@ -2,7 +2,6 @@
 '''
 datagenerator:read datafiles and generate the dataset in a numpy matrix
 现在这里也做了很多test
-比如看错误数据都是怎么回事
 author: CUI HAOTIAN
 date:2015.12.05
 '''
@@ -142,5 +141,5 @@ if __name__== '__main__':
     '''
     
     #test decay mode
-    data=test_time_decay(path='/Users/subercui/Git/BaikeBalance/New data/nn_test/MLP_error.txt')
+    data=test_time_decay(path='/Volumes/NO NAME/nn_test/test_file_2016-1-25_16-27-57.txt')
     utils.visualize(data)

@@ -2,7 +2,6 @@
 '''
 datagenerator:read datafiles and generate the dataset in a numpy matrix
 现在这里也做了很多test
-比如看错误数据都是怎么回事
 author: CUI HAOTIAN
 date:2015.12.05
 '''
@@ -13,7 +12,6 @@ import load_test as lt
 import controlfunction as cf
 import data_generator as dg
 from datetime import datetime
-import utils
 today=datetime.today()
 tstr=today.strftime('%y%m%d')
 
@@ -47,17 +45,15 @@ def select(data):
     #index=np.nonzero(np.abs(data[:,0])<7.7)
     #data=data[index]
     #2.筛选倾斜角速度在（-10.0，+10.0）
-    index=np.nonzero(np.abs(data[:,1])<20.)
+    index=np.nonzero(np.abs(data[:,1])<10.)
     data=data[index]
     #3.筛选U0>=1.9
     index=np.nonzero(data[:,2]>=1.9)
     data=data[index]
-    index=np.nonzero(data[:,2]<=3)
-    data=data[index]
     #4.筛选velocity在（1.5，2.5）
     #index=np.nonzero(np.abs(data[:,4]-2)<0.5)
     #data=data[index]
-    #结果6个数据范围(-7.7,7.7),(-20,20),1.9,(-0.03,0.03),(1.5,2.5),(-30,+30)
+    #结果6个数据范围(-7.7,7.7),(-10,10),1.9,(-0.03,0.03),(1.5,2.5),(-30,+30)
     return data
 
 #加模拟数据    
@@ -97,23 +93,19 @@ def visualize(data):
     plt.show()
 
 #读取记录数据，调查控制信号延迟    
-def test_time_decay(path='/Users/subercui/Git/BaikeBalance/New data/nn_test/NNcontrol_2015-12-20_11-39-36.txt'):
+def test_time_decay():
     #data=np.loadtxt('/Volumes/NO NAME/nn_test/test_file_2015-12-5_17-36-33.txt',delimiter=' ')
-    data=np.loadtxt(path)
-    print data.shape
+    data=np.loadtxt('/Users/subercui/Git/BaikeBalance/New data/nn_test/NNcontrol_2015-12-20_11-39-36.txt')
     #2.lean angle/degree 3.lean angle rate/degree 10.U0 11.turn angle in/rad 13.velocity 18.turn angle out 19.nn turn angle out
-    data=data[:,(1,2,9,10,12,18,19)]
+    data=data[:,(1,2,3,10,11,13,18,19)]
     #data=select(data)
     #visualize(data)
-    #predictions=lt.test(data[:,0:5],weightfile='MLP_weightsBest.hdf5')
-    predictions2=lt.test(data[:,0:5],weightfile='MLP_weightsMultispeed160118.hdf5')
-    #simupred=cf.control_func(data[:,0:5],data[:,0:5].shape[0])
+    predictions=lt.test(data[:,1:6])
     plt.figure('test decay')
-    plt.plot(data[:,-2],label='turn angle out')
-    plt.plot(data[:,-1],label='network out')
-    #plt.plot(simupred[:],label='simulation out')
-    #plt.plot(predictions[:],label='offline network out')
-    plt.plot(predictions2[:],label='offline mutispeed')
+    plt.plot(data[1250:1750,-2],label='turn angle out')
+    plt.plot(data[1250:1750,-1],label='network out')
+    #plt.plot(-data[:,1],label='steering filted')
+    #plt.plot(predictions,label='offline network out')
     plt.grid()
     plt.legend(loc='best', fancybox=True, framealpha=0.5)
     plt.xlabel('time(10ms)')
@@ -123,15 +115,13 @@ def test_time_decay(path='/Users/subercui/Git/BaikeBalance/New data/nn_test/NNco
     return data 
 
 if __name__== '__main__':
-    '''
     matchs=filesinroot(path,"multispeed",0)
     multispeed_data=construct(matchs)
     multispeed_data=select(multispeed_data)
-    #multispeed_data=add_simu_data(multispeed_data,multispeed_data.shape[0]/2)
+    multispeed_data=add_simu_data(multispeed_data,multispeed_data.shape[0]/2)
     visualize(multispeed_data)
     savefile(multispeed_data,parent_path+'/dataset/multispeed_dataset'+tstr+'.pkl.gz')
-    '''
-    '''
+    
     matchs=filesinroot(path,"test",0)
     data=dg.construct(matchs)
     data=dg.select(data)
@@ -139,8 +129,8 @@ if __name__== '__main__':
     data=np.vstack((multispeed_data,data))
     dg.visualize(data)
     savefile(multispeed_data,parent_path+'/dataset/dataset'+tstr+'.pkl.gz')
-    '''
     
+    '''
     #test decay mode
-    data=test_time_decay(path='/Users/subercui/Git/BaikeBalance/New data/nn_test/MLP_error.txt')
-    utils.visualize(data)
+    data=test_time_decay()
+    '''

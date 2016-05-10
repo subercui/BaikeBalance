@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 '''
 load&predict 
 author: CUI HAOTIAN
@@ -36,8 +35,8 @@ def absolute_percent_error(predictions, targets, targets_mean):
 def absolute_error(predictions, targets):
     return np.abs(predictions - targets).mean(axis=0)
     
-def test(array,weightfile='MLP_weightsMultispeed160118.hdf5'):
-    #array=np.array([[ 0.09167325, 0.006      ,0,0,0]])，'MLP_weightsMultispeed151226.hdf5'这个也用过
+def test(array,weightfile='MLP_weightsMultispeed151226.hdf5'):
+    #array=np.array([[ 0.09167325, 0.006      ,0,0,0]])
     MLPmodel=init(weight=weightfile)
     array=mf.normalize(array)
     return MLPmodel.predict(array,array.shape[0])
