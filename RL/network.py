@@ -38,13 +38,9 @@ class Networks(object):
         self.rng = rng
 
         lasagne.random.set_rng(self.rng)
+
+        ######init q_net#####
         
-        self.q_l_out=self.build_q_network(network_type, state_width, 1,
-                                        action_width, num_frames, batch_size)
-        if self.freeze_interval > 0:#这是什么？
-            self.next_q_l_out = self.build_q_network(network_type, state_width, 1,
-                                        action_width, num_frames, batch_size)
-            self.reset_q_hat()
         states = T.tensor4('states')
         next_states = T.tensor4('next_states')
         rewards = T.col('rewards')
@@ -70,6 +66,14 @@ class Networks(object):
         self.terminals_shared = theano.shared(
             np.zeros((batch_size, 1), dtype='int32'),
             broadcastable=(False, True))
+
+        self.q_l_out=self.build_q_network(network_type, state_width, 1,
+                                        action_width, num_frames, batch_size)
+
+        if self.freeze_interval > 0:#这是什么？
+            self.next_q_l_out = self.build_q_network(network_type, state_width, 1,
+                                        action_width, num_frames, batch_size)
+            self.reset_q_hat()
             
         #输入在下面自己定义，注意有state和actions两个都是输入;输出要是（batch*1）的；注意这里action要用输入的真action
         q_vals = lasagne.layers.get_output(self.q_l_out,{'in_l1':states,'in_l2':actions})
@@ -102,7 +106,7 @@ class Networks(object):
             loss = 0.5 * diff ** 2#果然目标函数loss主要就是diff，是sita的函数。反正是求偏导，等于当做reward是与sita无关的量（定量）。
 
         if batch_accumulator == 'sum':
-            loss = T.sum(loss)
+            loss = T.sum(loss)#shape (1,1)
         elif batch_accumulator == 'mean':
             loss = T.mean(loss)
         else:
@@ -131,12 +135,19 @@ class Networks(object):
             updates = lasagne.updates.apply_momentum(updates, None,
                                                      self.momentum)
 
+        self._q_vals = theano.function([], q_vals,
+                                       givens={states: self.states_shared})
+        ######------######
+
+        ######init u_net######
+
+        ######------######
+
         #这个就是公式(16)(17)啦
         self._train = theano.function([], [loss, q_vals], updates=updates,
                                       givens=givens)#哦！！！你这样拿givens换就可以每次给进来新的值；
                                                     #可是为什么用givens，为什么不在输入直接写tensorvariable，说是不是你不知道这么写
-        self._q_vals = theano.function([], q_vals,
-                                       givens={states: self.states_shared})
+        
                                        
     def build_q_network(self, network_type, state_width, state_height,
                       action_width, num_frames, batch_size):
