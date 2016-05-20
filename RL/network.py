@@ -12,7 +12,8 @@ import lasagne
 import numpy as np
 import theano
 import theano.tensor as T
-from updates import deepmind_rmsprop
+from collections import OrderedDict
+from updates import opdac_rmsprop
 
 class Networks(object):
     """including both actor:u_net and critic:q_net 
@@ -101,18 +102,18 @@ class Networks(object):
             # there, which is what the DeepMind implementation does.
             quadratic_part = T.minimum(abs(diff), self.clip_delta)
             linear_part = abs(diff) - quadratic_part
-            loss = 0.5 * quadratic_part ** 2 + self.clip_delta * linear_part
+            q_loss = 0.5 * quadratic_part ** 2 + self.clip_delta * linear_part
         else:
-            loss = 0.5 * diff ** 2#果然目标函数loss主要就是diff，是sita的函数。反正是求偏导，等于当做reward是与sita无关的量（定量）。
+            q_loss = 0.5 * diff ** 2#果然目标函数q_loss主要就是diff，是sita的函数。反正是求偏导，等于当做reward是与sita无关的量（定量）。
 
         if batch_accumulator == 'sum':
-            loss = T.sum(loss)#shape (1,1)
+            q_loss = T.sum(q_loss)#shape (1,1)
         elif batch_accumulator == 'mean':
-            loss = T.mean(loss)
+            q_loss = T.mean(q_loss)
         else:
             raise ValueError("Bad accumulator: {}".format(batch_accumulator))
             
-        params = lasagne.layers.helper.get_all_params(self.l_out)  
+        q_params = lasagne.layers.helper.get_all_params(self.q_l_out)  
         givens = {
             states: self.states_shared,
             next_states: self.next_states_shared,
@@ -120,31 +121,52 @@ class Networks(object):
             actions: self.actions_shared,
             terminals: self.terminals_shared
         }
+
         if update_rule == 'deepmind_rmsprop':
-            updates = deepmind_rmsprop(loss, params, self.lr, self.rho,
+            q_updates = deepmind_rmsprop(q_loss, q_params, self.lr, self.rho,
                                        self.rms_epsilon)
         elif update_rule == 'rmsprop':
-            updates = lasagne.updates.rmsprop(loss, params, self.lr, self.rho,
+            q_updates = lasagne.updates.rmsprop(q_loss, q_params, self.lr, self.rho,
                                               self.rms_epsilon)
         elif update_rule == 'sgd':
-            updates = lasagne.updates.sgd(loss, params, self.lr)
+            q_updates = lasagne.updates.sgd(q_loss, q_params, self.lr)
         else:
             raise ValueError("Unrecognized update: {}".format(update_rule))
+        
+
+        self.get_q_vals = theano.function([], q_vals,
+                                       givens={states: self.states_shared})
+        ######------######
+
+        ######init u_net######
+        self.u_l_out=self.build_u_network(network_type,state_width,1,
+                                         action_width, num_frames, batch_size)
+                                         
+        u_acts = lasagne.layers.get_output(self.u_l_out, states )
+        
+        u_params = lasagne.layers.helper.get_all_params(self.u_l_out)
+        
+        #忽略124-136，重写updates;
+        #比如这里q_loss对q_params求导
+        #opdac_rmsprop 完成公式(18)
+        WhetherDirect=False;
+        u_updates = opdac_rmsprop(q_vals, u_acts, u_params,self.u_lr,
+                                  WhetherDirect)
+        
+        self.get_u_acts = theano.function([], u_acts,
+                                       givens={states: self.states_shared})
+        ######------######
+        
+        
+        #另一种表达写法updates=OrderedDict(q_updates,**u_updates)
+        updates = OrderedDict(q_updates.items()+u_updates.etems())
         
         if self.momentum > 0:
             updates = lasagne.updates.apply_momentum(updates, None,
                                                      self.momentum)
 
-        self._q_vals = theano.function([], q_vals,
-                                       givens={states: self.states_shared})
-        ######------######
-
-        ######init u_net######
-
-        ######------######
-
         #这个就是公式(16)(17)啦
-        self._train = theano.function([], [loss, q_vals], updates=updates,
+        self._train = theano.function([], [q_loss, q_vals], updates=updates,
                                       givens=givens)#哦！！！你这样拿givens换就可以每次给进来新的值；
                                                     #可是为什么用givens，为什么不在输入直接写tensorvariable，说是不是你不知道这么写
         
