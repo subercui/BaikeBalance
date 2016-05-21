@@ -44,21 +44,20 @@ def sgd(loss_or_grads, params, learning_rate):
 
     return updates
     
-def opdac_rmsprop(q_vals, u_acts, u_params,learning_rate,WhetherDirect):
+def opdac_rmsprop(q_vals, acts_t, u_acts, u_params,learning_rate,WhetherDirect):
     if WhetherDirect:
-        #TODO: 这个一定要看一看，原文为什么不能直接求导？
+        #TODO: 这个一定要看一看，原文为什么不能直接求导？,因为u_params根本不在计算过程内
         return sgd(q_vals, u_params, learning_rate)
     else:
-        q2a_grads=get_or_compute_grads(q_vals, u_acts)
+        q2a_grads=get_or_compute_grads(q_vals, acts_t)
         a2w_grads=get_or_compute_grads(u_acts, u_params)
-        grads=a2w_grads*q2a_grads#这两个dict怎么乘！
+        grads=a2w_grads*q2a_grads#TODO: 这两个dict怎么乘！
         
         updates = OrderedDict()
         for param, grad in zip(u_params, grads):
             updates[param] = param - learning_rate * grad
 
         return updates
-<<<<<<< HEAD
         
 
         
@@ -134,6 +133,3 @@ def deepmind_rmsprop(loss_or_grads, params, learning_rate,
                            T.sqrt(acc_rms_new - acc_grad_new **2 + epsilon)))
 
     return updates
-=======
->>>>>>> b4d6ed51793449dbbd8b2e76435741694546468b
-       
