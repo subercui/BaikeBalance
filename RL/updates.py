@@ -51,6 +51,7 @@ def opdac_rmsprop(q_vals, acts_t, u_acts, u_params,learning_rate,WhetherDirect):
     else:
         q2a_grads=get_or_compute_grads(q_vals, acts_t)
         a2w_grads=get_or_compute_grads(u_acts, u_params)
+        #TODO: 这还有个正负号错误，要增长
         grads=a2w_grads*q2a_grads#TODO: 这两个dict怎么乘！
         
         updates = OrderedDict()
