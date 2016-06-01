@@ -21,7 +21,7 @@ class Networks(object):
     """
     
     def __init__(self, state_width, action_width, action_bound,
-                 num_frames, discount, learning_rate, rho,
+                 num_frames, discount, learning_rate, u_lr,rho,
                  rms_epsilon, momentum, clip_delta, freeze_interval,
                  batch_size, network_type, update_rule,
                  batch_accumulator, rng):
@@ -33,6 +33,7 @@ class Networks(object):
         self.discount = discount
         self.rho = rho
         self.lr = learning_rate
+        self.u_lr = u_lr
         self.rms_epsilon = rms_epsilon
         self.momentum = momentum
         self.clip_delta = clip_delta
@@ -197,6 +198,63 @@ class Networks(object):
                       action_width, num_frames, batch_size):
         return self.build_linear_network(state_width, state_height,
                                          action_width, num_frames, batch_size)
+    
+
+    def train(self, states, actions, rewards, next_states, terminals):
+        """
+        Train one batch.
+
+        Arguments:
+
+        states - b x f x h x w numpy array, where b is batch size,
+                 f is num frames, h is height and w is width.
+        actions - b x 1 numpy array of integers
+        rewards - b x 1 numpy array
+        next_states - b x f x h x w numpy array
+        terminals - b x 1 numpy boolean array (currently ignored)
+
+        Returns: average loss
+        """
+
+        self.states_shared.set_value(states)
+        self.next_states_shared.set_value(next_states)
+        self.actions_shared.set_value(actions)
+        self.rewards_shared.set_value(rewards)
+        self.terminals_shared.set_value(terminals)
+        #TODO: 这句的功能是在有freeze，即next网络会被冻住的时候，在适当的时候
+        #解冻更新；这个逻辑暂时没有用到，之后看一下是否添加
+        if (self.freeze_interval > 0 and
+            self.update_counter % self.freeze_interval == 0):
+            self.reset_q_hat()
+        loss, _ = self._train()
+        self.update_counter += 1
+        return np.sqrt(loss)
+
+    def q_vals(self, state):
+        states = np.zeros((self.batch_size, self.num_frames, self.input_height,
+                           self.input_width), dtype=theano.config.floatX)
+        states[0, ...] = state
+        self.states_shared.set_value(states)
+        return self.get_q_vals()[0]
+
+    def u_acts(self, state):
+        states = np.zeros((self.batch_size, self.num_frames, self.input_height,
+                           self.input_width), dtype=theano.config.floatX)
+        states[0, ...] = state
+        self.states_shared.set_value(states)
+        return self.get_u_vals()[0]
+
+    def choose_action(self, state, epsilon):
+        if self.rng.rand() < epsilon:
+            #TODO: 这也不是个很可行的explore策略
+            return (self.rng.random()-0.5)*self.action_bound/10.
+        u_act = self.u_acts(state)
+        return u_act[0,0,0]
+
+    def reset_q_hat(self):
+        all_params = lasagne.layers.helper.get_all_param_values(self.q_l_out)
+        lasagne.layers.helper.set_all_param_values(self.next_q_l_out, all_params)
+
                                          
     def build_linear_network(self, state_width, state_height, action_width,
                              num_frames, batch_size):
@@ -254,7 +312,7 @@ class Networks(object):
 
 def main():
     net = Networks(state_width=5,action_width=1,action_bound=40,num_frames=1,
-                    discount=0.95,learning_rate=.0002,rho=.99,rms_epsilon=1e-6,
+                    discount=0.95,learning_rate=.0002,u_lr=.0002,rho=.99,rms_epsilon=1e-6,
                     momentum=0,clip_delta=0, freeze_interval=-1,batch_size=32, 
                     network_type='linear',update_rule='rmsprop',
                     batch_accumulator='mean',rng=np.random.RandomState())

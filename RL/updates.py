@@ -49,9 +49,9 @@ def opdac_rmsprop(q_vals, acts_t, u_acts, u_params,learning_rate,WhetherDirect):
         #TODO: 这个一定要看一看，原文为什么不能直接求导？,因为u_params根本不在计算过程内
         return sgd(q_vals, u_params, learning_rate)
     else:
-        q2a_grads=get_or_compute_grads(q_vals, acts_t)
+        q2a_grads=get_or_compute_grads(q_vals, acts_t)#TODO: theano好像只能对一个scalar的数求导，没有scarlar的时候怎么搞
         a2w_grads=get_or_compute_grads(u_acts, u_params)
-        grads=a2w_grads*q2a_grads#TODO: 这两个dict怎么乘！
+        grads=a2w_grads*q2a_grads#TODO: 这两个dict怎么乘！另外这个目标可是要让函数增大，要修正更新方向
         
         updates = OrderedDict()
         for param, grad in zip(u_params, grads):
