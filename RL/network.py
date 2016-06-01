@@ -106,9 +106,9 @@ class Networks(object):
         q_vals = lasagne.layers.get_output(self.q_l_out,{'in_l1':states,'in_l2':actions})
         
         if self.freeze_interval > 0:#这是什么？
-            next_q_vals = lasagne.layers.get_output(self.next_q_l_out,{'in_l1':next_states,'in_l2':actions})
+            next_q_vals = lasagne.layers.get_output(self.next_q_l_out,{'in_l1':next_states,'in_l2':u_acts})
         else:
-            next_q_vals = lasagne.layers.get_output(self.q_l_out,{'in_l1':next_states,'in_l2':actions})
+            next_q_vals = lasagne.layers.get_output(self.q_l_out,{'in_l1':next_states,'in_l2':u_acts})
             next_q_vals = theano.gradient.disconnected_grad(next_q_vals)
         
         #DPG中公式（16）的delta_t,这里和DQN很不同
@@ -170,12 +170,13 @@ class Networks(object):
         #忽略124-136，重写updates;
         #比如这里q_loss对q_params求导
         #opdac_rmsprop 完成公式(18)
-        u_updates = opdac_rmsprop(q_vals, u_acts, u_params,self.u_lr,
+        u_updates = opdac_rmsprop(q_vals, self.actions_shared, u_acts, u_params,self.u_lr,
                                   False)
         
         self.get_u_acts = theano.function([], u_acts,
                                        givens={states: self.states_shared}) 
 
+        #这个函数get_q_vals或许用不上
         self.get_q_vals = theano.function([], q_vals,
                                        givens={states: self.states_shared})       
         
