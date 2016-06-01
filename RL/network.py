@@ -42,6 +42,12 @@ class Networks(object):
         lasagne.random.set_rng(self.rng)
         
         ######init u_net######
+        """初始化策略网络u_net,包括
+        构造state等的符号变量和shared变量，
+        构造网络
+        给出动作u_acts
+        给出网络参数u_params
+        """
         states = T.tensor4('states')
         next_states = T.tensor4('next_states')
         rewards = T.col('rewards')
@@ -79,6 +85,14 @@ class Networks(object):
 
 
         ######init q_net#####
+        """初始化评价网络q_net,包括
+        构造网络
+        给出评价q_vals
+        给出下一时刻的评价next_q_vals
+        给出td error：diff
+        给出网络参数u_params
+        有了以上两个经过中间变量q_loss的计算，给出q_updates
+        """
 
         self.q_l_out=self.build_q_network(network_type, state_width, 1,
                                         action_width, num_frames, batch_size)
@@ -146,21 +160,26 @@ class Networks(object):
             raise ValueError("Unrecognized update: {}".format(update_rule))
         
 
-        self.get_q_vals = theano.function([], q_vals,
-                                       givens={states: self.states_shared})
         ######------######        
-        
+        """
+        先给出u_updates（由于u_updates和q_upates有依赖，放在这里才给出）
+        给出总的updates，于是就能够训练了
+        给出符号函数_train
+        给出网络输出的符号函数get_u_acts和get_q_vals
+        """
         #忽略124-136，重写updates;
         #比如这里q_loss对q_params求导
         #opdac_rmsprop 完成公式(18)
-        WhetherDirect=False;
         u_updates = opdac_rmsprop(q_vals, u_acts, u_params,self.u_lr,
-                                  WhetherDirect)
+                                  False)
         
         self.get_u_acts = theano.function([], u_acts,
-                                       givens={states: self.states_shared})        
+                                       givens={states: self.states_shared}) 
+
+        self.get_q_vals = theano.function([], q_vals,
+                                       givens={states: self.states_shared})       
         
-        #另一种表达写法updates=OrderedDict(q_updates,**u_updates)
+        #另一种表达写法updates=OrderedDict(q_updates,**u_updates),意思都是合并两个字典
         updates = OrderedDict(q_updates.items()+u_updates.etems())
         
         if self.momentum > 0:
@@ -193,8 +212,40 @@ class Networks(object):
             shape=(batch_size, 1, action_width, 1)
         )
 
+        #如何接受两个输入层，见于lasagne tutorial：All layers work this way, 
+        #except for layers that merge multiple inputs: those accept a list of incoming layers as their first constructor argument instead
+        l_mg=lasagne.layers.ConcatLayer([in_l1,in_l2],axis=2)
+        l3 = lasagne.layers.DenseLayer(
+            l_mg,
+            num_units=1,
+            nonlinearity=lasagne.nonlinearities.rectify)
         l_out = lasagne.layers.DenseLayer(
+            l3,
+            num_units=1,
+            nonlinearity=None)
+
+        return l_out
+  
+    def build_u_network(self, network_type, state_width, state_height, action_width,
+                             num_frames, batch_size):
+        """
+        Build a simple linear learner.  Useful for creating
+        tests that sanity-check the weight update code.
+        """
+
+        l_in = lasagne.layers.InputLayer(
+            shape=(batch_size, num_frames, state_width, state_height)
+        )       
+        l_h1 = lasagne.layers.DenseLayer(
             l_in,
+            num_units=100,
+            nonlinearity=lasagne.nonlinearities.rectify)
+        l_h2 = lasagne.layers.DenseLayer(
+            l_h1,
+            num_units=20,
+            nonlinearity=lasagne.nonlinearities.rectify)
+        l_out = lasagne.layers.DenseLayer(
+            l_h2,
             num_units=1,
             nonlinearity=None)
 
@@ -209,4 +260,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    net=main()
