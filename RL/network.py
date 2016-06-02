@@ -52,7 +52,7 @@ class Networks(object):
         states = T.tensor4('states')
         next_states = T.tensor4('next_states')
         rewards = T.col('rewards')
-        actions = T.col('actions')
+        actions = T.tensor4('actions')
         terminals = T.icol('terminals')
         
         self.states_shared = theano.shared(
@@ -68,8 +68,8 @@ class Networks(object):
             broadcastable=(False, True))
 
         self.actions_shared = theano.shared(
-            np.zeros((batch_size, 1), dtype=theano.config.floatX),
-            broadcastable=(False, True))
+            np.zeros((batch_size, 1, action_width,1), dtype=theano.config.floatX),
+            broadcastable=(False, True,True,True))
 
         self.terminals_shared = theano.shared(
             np.zeros((batch_size, 1), dtype='int32'),
@@ -95,8 +95,10 @@ class Networks(object):
         有了以上两个经过中间变量q_loss的计算，给出q_updates
         """
 
-        self.q_l_out=self.build_q_network(network_type, state_width, 1,
-                                        action_width, num_frames, batch_size)
+        self.q_l_out,q_net_input=self.build_q_network(network_type, state_width, 1,
+                                        action_width, num_frames, batch_size,
+                                        input1=states,
+                                        input2=actions)
 
         if self.freeze_interval > 0:#这是什么？
             self.next_q_l_out = self.build_q_network(network_type, state_width, 1,
@@ -134,7 +136,7 @@ class Networks(object):
             q_loss = 0.5 * diff ** 2#果然目标函数q_loss主要就是diff，是sita的函数。反正是求偏导，等于当做reward是与sita无关的量（定量）。
 
         if batch_accumulator == 'sum':
-            q_loss = T.sum(q_loss)#shape (1,1)
+            q_loss = T.sum(q_loss)#shape (1)
         elif batch_accumulator == 'mean':
             q_loss = T.mean(q_loss)
         else:
@@ -143,7 +145,7 @@ class Networks(object):
         q_params = lasagne.layers.helper.get_all_params(self.q_l_out)  
         givens = {
             states: self.states_shared,
-            next_states: self.next_states_shared,
+            #next_states: self.next_states_shared,
             rewards: self.rewards_shared,
             actions: self.actions_shared,
             terminals: self.terminals_shared
@@ -171,18 +173,25 @@ class Networks(object):
         #忽略124-136，重写updates;
         #比如这里q_loss对q_params求导
         #opdac_rmsprop 完成公式(18)
-        u_updates = opdac_rmsprop(q_vals, self.actions_shared, u_acts, u_params,self.u_lr,
-                                  False)
+        if batch_accumulator == 'sum':
+            acm_u_acts = T.sum(u_acts)#这里先这么粗暴的写了，在acts只有一维的时候可以这样shape (0)
+            acm_q=T.sum(q_vals)
+        elif batch_accumulator == 'mean':
+            acm_u_acts = T.mean(u_acts)
+            acm_q=T.mean(q_vals)
+
+        u_updates = opdac_rmsprop(acm_q, q_net_input, acm_u_acts, u_params,self.u_lr,
+                                  False)#TODO: 这里该不该填states，还是该填states_shared
         
         self.get_u_acts = theano.function([], u_acts,
                                        givens={states: self.states_shared}) 
 
         #这个函数get_q_vals或许用不上
         self.get_q_vals = theano.function([], q_vals,
-                                       givens={states: self.states_shared})       
+                                       givens={states: self.states_shared, actions: self.actions_shared})       
         
         #另一种表达写法updates=OrderedDict(q_updates,**u_updates),意思都是合并两个字典
-        updates = OrderedDict(q_updates.items()+u_updates.etems())
+        updates = OrderedDict(q_updates.items()+u_updates.items())
         
         if self.momentum > 0:
             updates = lasagne.updates.apply_momentum(updates, None,
@@ -192,12 +201,6 @@ class Networks(object):
         self._train = theano.function([], [q_loss, q_vals], updates=updates,
                                       givens=givens)#哦！！！你这样拿givens换就可以每次给进来新的值；
                                                     #可是为什么用givens，为什么不在输入直接写tensorvariable，说是不是你不知道这么写
-        
-                                       
-    def build_q_network(self, network_type, state_width, state_height,
-                      action_width, num_frames, batch_size):
-        return self.build_linear_network(state_width, state_height,
-                                         action_width, num_frames, batch_size)
     
 
     def train(self, states, actions, rewards, next_states, terminals):
@@ -256,19 +259,22 @@ class Networks(object):
         lasagne.layers.helper.set_all_param_values(self.next_q_l_out, all_params)
 
                                          
-    def build_linear_network(self, state_width, state_height, action_width,
-                             num_frames, batch_size):
+    def build_q_network(self, network_type, state_width, state_height, action_width,
+                             num_frames, batch_size,input1,input2):
         """
         Build a simple linear learner.  Useful for creating
         tests that sanity-check the weight update code.
         """
 
         in_l1 = lasagne.layers.InputLayer(
-            shape=(batch_size, num_frames, state_width, state_height)
+            shape=(batch_size, num_frames, state_width, state_height),
+            #input_var=input1
         )
+        q_net_input=in_l1.input_var
         
         in_l2 = lasagne.layers.InputLayer(
-            shape=(batch_size, 1, action_width, 1)
+            shape=(batch_size, 1, action_width, 1),
+            #input_var=input2
         )
 
         #如何接受两个输入层，见于lasagne tutorial：All layers work this way, 
@@ -283,7 +289,7 @@ class Networks(object):
             num_units=1,
             nonlinearity=None)
 
-        return l_out
+        return l_out,q_net_input
   
     def build_u_network(self, network_type, state_width, state_height, action_width,
                              num_frames, batch_size):
@@ -316,6 +322,7 @@ def main():
                     momentum=0,clip_delta=0, freeze_interval=-1,batch_size=32, 
                     network_type='linear',update_rule='rmsprop',
                     batch_accumulator='mean',rng=np.random.RandomState())
+    return net
 
 
 if __name__ == '__main__':
