@@ -52,7 +52,7 @@ class Networks(object):
         states = T.tensor4('states')
         next_states = T.tensor4('next_states')
         rewards = T.col('rewards')
-        actions = T.tensor4('actions')
+        actions = T.matrix('actions')
         terminals = T.icol('terminals')
         
         self.states_shared = theano.shared(
@@ -68,8 +68,8 @@ class Networks(object):
             broadcastable=(False, True))
 
         self.actions_shared = theano.shared(
-            np.zeros((batch_size, 1, action_width,1), dtype=theano.config.floatX),
-            broadcastable=(False, True,True,True))
+            np.zeros((batch_size, action_width), dtype=theano.config.floatX),
+            broadcastable=(False, True))
 
         self.terminals_shared = theano.shared(
             np.zeros((batch_size, 1), dtype='int32'),
@@ -95,10 +95,8 @@ class Networks(object):
         有了以上两个经过中间变量q_loss的计算，给出q_updates
         """
 
-        self.q_l_out,q_net_input=self.build_q_network(network_type, state_width, 1,
-                                        action_width, num_frames, batch_size,
-                                        input1=states,
-                                        input2=actions)
+        self.q_l_out,in_l1,in_l2=self.build_q_network(network_type, state_width, 1,
+                                        action_width, num_frames, batch_size)
 
         if self.freeze_interval > 0:#这是什么？
             self.next_q_l_out = self.build_q_network(network_type, state_width, 1,
@@ -106,12 +104,12 @@ class Networks(object):
             self.reset_q_hat()
             
         #输入在下面自己定义，注意有state和actions两个都是输入;输出要是（batch*1）的；注意这里action要用输入的真action
-        q_vals = lasagne.layers.get_output(self.q_l_out,{'in_l1':states,'in_l2':actions})
+        q_vals = lasagne.layers.get_output(self.q_l_out,{in_l1:states,in_l2:actions})#TODO: 现在的问题就是这一句该怎么写
         
         if self.freeze_interval > 0:#这是什么？
-            next_q_vals = lasagne.layers.get_output(self.next_q_l_out,{'in_l1':next_states,'in_l2':u_acts})
+            next_q_vals = lasagne.layers.get_output(self.next_q_l_out,{in_l1:next_states,in_l2:u_acts})
         else:
-            next_q_vals = lasagne.layers.get_output(self.q_l_out,{'in_l1':next_states,'in_l2':u_acts})
+            next_q_vals = lasagne.layers.get_output(self.q_l_out,{in_l1:next_states,in_l2:u_acts})
             next_q_vals = theano.gradient.disconnected_grad(next_q_vals)
         
         #DPG中公式（16）的delta_t,这里和DQN很不同
@@ -145,7 +143,7 @@ class Networks(object):
         q_params = lasagne.layers.helper.get_all_params(self.q_l_out)  
         givens = {
             states: self.states_shared,
-            #next_states: self.next_states_shared,
+            next_states: self.next_states_shared,
             rewards: self.rewards_shared,
             actions: self.actions_shared,
             terminals: self.terminals_shared
@@ -180,7 +178,7 @@ class Networks(object):
             acm_u_acts = T.mean(u_acts)
             acm_q=T.mean(q_vals)
 
-        u_updates = opdac_rmsprop(acm_q, q_net_input, acm_u_acts, u_params,self.u_lr,
+        u_updates = opdac_rmsprop(acm_q, actions, acm_u_acts, u_params,self.u_lr,
                                   False)#TODO: 这里该不该填states，还是该填states_shared
         
         self.get_u_acts = theano.function([], u_acts,
@@ -260,7 +258,7 @@ class Networks(object):
 
                                          
     def build_q_network(self, network_type, state_width, state_height, action_width,
-                             num_frames, batch_size,input1,input2):
+                             num_frames, batch_size):
         """
         Build a simple linear learner.  Useful for creating
         tests that sanity-check the weight update code.
@@ -268,18 +266,16 @@ class Networks(object):
 
         in_l1 = lasagne.layers.InputLayer(
             shape=(batch_size, num_frames, state_width, state_height),
-            #input_var=input1
-        )
-        q_net_input=in_l1.input_var
+            )
         
         in_l2 = lasagne.layers.InputLayer(
-            shape=(batch_size, 1, action_width, 1),
-            #input_var=input2
-        )
+            shape=(batch_size, action_width)
+            )
 
         #如何接受两个输入层，见于lasagne tutorial：All layers work this way, 
         #except for layers that merge multiple inputs: those accept a list of incoming layers as their first constructor argument instead
-        l_mg=lasagne.layers.ConcatLayer([in_l1,in_l2],axis=2)
+        rsp_l1 = lasagne.layers.ReshapeLayer(in_l1, ([0],-1))
+        l_mg=lasagne.layers.ConcatLayer([rsp_l1,in_l2],axis=1)
         l3 = lasagne.layers.DenseLayer(
             l_mg,
             num_units=1,
@@ -289,7 +285,7 @@ class Networks(object):
             num_units=1,
             nonlinearity=None)
 
-        return l_out,q_net_input
+        return l_out,in_l1,in_l2
   
     def build_u_network(self, network_type, state_width, state_height, action_width,
                              num_frames, batch_size):

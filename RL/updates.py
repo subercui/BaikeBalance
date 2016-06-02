@@ -50,7 +50,7 @@ def opdac_rmsprop(q_vals, acts_t, u_acts, u_params,learning_rate,WhetherDirect):
         return sgd(q_vals, u_params, learning_rate)
     else:
         q2a_grads=get_or_compute_grads(q_vals, acts_t)#TODO: theano好像只能对一个scalar的数求导，没有scarlar的时候怎么搞
-        q2a_grads=T.sum(q2a_grads)#TODO: 这个逻辑是不对的，只是现在action只有一个，先这样胡写
+        q2a_grads=T.sum(q2a_grads)#TODO: 这个逻辑是不对的，只是现在action只有一个，先这样胡写。后期可以参考使用theano的求jacobian
         a2w_grads=get_or_compute_grads(u_acts, u_params)
         grads=[a2w_grad*q2a_grads for a2w_grad in a2w_grads]#TODO: 这两个dict怎么乘！另外这个目标可是要让函数增大，要修正更新方向
         
