@@ -231,11 +231,14 @@ class Networks(object):
         self.update_counter += 1
         return np.sqrt(loss)
 
-    def q_vals(self, state):
+    def q_vals(self, state,action):
         states = np.zeros((self.batch_size, self.num_frames, self.input_height,
                            self.input_width), dtype=theano.config.floatX)
         states[0, ...] = state
         self.states_shared.set_value(states)
+        actions = np.zeros((self.batch_size, self.action_width), dtype=theano.config.floatX)
+        actions[0, ...] = action
+        self.actions_shared.set_value(actions)
         return self.get_q_vals()[0]
 
     def u_acts(self, state):
@@ -250,9 +253,12 @@ class Networks(object):
             #TODO: 这也不是个很可行的explore策略
             return (self.rng.random()-0.5)*self.action_bound/10.
         u_act = self.u_acts(state)
-        return u_act[0,0,0]
+        return u_act
 
     def reset_q_hat(self):
+        """force to reset the next_q_l_out network's parameters,
+        as the q_l_out network's parameters.
+        """
         all_params = lasagne.layers.helper.get_all_param_values(self.q_l_out)
         lasagne.layers.helper.set_all_param_values(self.next_q_l_out, all_params)
 
