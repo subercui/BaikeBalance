@@ -17,11 +17,10 @@ sys.setrecursionlimit(10000)
 
 class NeuralAgent(object):
     
-    def __init__(self,networks,q_net, epsilon_start, epsilon_min,
+    def __init__(self,networks, epsilon_start, epsilon_min,
                  epsilon_decay, replay_memory_size, exp_pref,
                  replay_start_size, update_frequency, rng):
         self.networks=networks
-        self.q_net=q_net
         self.epsilon_start = epsilon_start
         self.epsilon_min = epsilon_min
         self.epsilon_decay = epsilon_decay
@@ -32,8 +31,8 @@ class NeuralAgent(object):
         self.rng = rng
         
         self.phi_length = self.networks.num_frames
-        self.state_width = self.networks.input_width
-        self.action_width = self.networks.output_width
+        self.state_width = self.networks.state_width
+        self.action_width = self.networks.action_width
         
         # create a folder to hold results
         time_str=time.strftime("_%m-%d-%H-%M_",time.gmtime())
@@ -130,7 +129,7 @@ class NeuralAgent(object):
         self.loss_averages = []
 
         self.start_time = time.time()
-        return_action = (self.rng.random()-0.5)*self.action_bound/10.
+        return_action = (self.rng.rand()-0.5)*self.action_bound/10.
 
         self.last_action = return_action
 
@@ -145,10 +144,10 @@ class NeuralAgent(object):
 
         Arguments:
            reward      - Real valued reward.
-           observation - A height x width numpy array
+           observation - A height x width numpy array:width*1 or 1*width*1
 
         Returns:
-           An integer action.
+           An vector action.
 
         """
 
@@ -200,7 +199,8 @@ class NeuralAgent(object):
             phi = data_set.phi(cur_state)
             action = self.networks.choose_action(phi, epsilon)#选择下一步动作
         else:
-            action = (self.rng.random()-0.5)*self.action_bound/10.
+            #如果刚刚开始，连一个phi都还没有，那么就先随机产生动作了
+            action = (self.rng.rand()-0.5)*self.action_bound/10.
 
         return action
         
@@ -257,7 +257,7 @@ class NeuralAgent(object):
     def finish_epoch(self, epoch):
         net_file = open(self.exp_dir + '/network_file_' + str(epoch) + \
                         '.pkl', 'w')
-        cPickle.dump(self.networks, net_file, -1)!!!#or u_net q_net
+        cPickle.dump(self.networks, net_file, -1)
         net_file.close()
 
     def start_testing(self):
@@ -266,6 +266,8 @@ class NeuralAgent(object):
         self.episode_counter = 0
 
     def finish_testing(self, epoch):
+        """这个是干嘛的
+        """
         self.testing = False
         holdout_size = 3200
 

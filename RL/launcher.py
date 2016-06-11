@@ -11,13 +11,13 @@ Created on Tue May 10 17:11:56 2016
 import os
 import argparse
 import logging
-#TODO: import env_interface
+import env_interface
 import cPickle
 import numpy as np
 import theano
 
 import experiment
-#TODO:import agent
+import agent
 import network
 
 def process_args(args, defaults, description):
@@ -191,8 +191,9 @@ def launch(args, defaults, description):
     #             parameters.repeat_action_probability)
 
     #ale.loadROM(full_rom_path)
+    env_intf=env_interface.EnvInterface()
 
-    action_width = 1 #len(ale.getMinimalActionSet())
+    action_width = env_intf.action_width #len(ale.getMinimalActionSet())
     if parameters.nn_file is None:
         net = network.Networks(state_width=defaults.STATE_WIDTH,
                                          action_width=action_width,
@@ -216,29 +217,24 @@ def launch(args, defaults, description):
         handle = open(parameters.nn_file, 'r')
         net = cPickle.load(handle)
 
-    '''agent = ale_agent.NeuralAgent(net,
-                                  parameters.epsilon_start,
-                                  parameters.epsilon_min,
-                                  parameters.epsilon_decay,
-                                  parameters.replay_memory_size,
-                                  parameters.experiment_prefix,
-                                  parameters.replay_start_size,
-                                  parameters.update_frequency,
-                                  rng)
+    neural_agent = agent.NeuralAgent(networks=net,
+                                  epsilon_start=parameters.epsilon_start,
+                                  epsilon_min=parameters.epsilon_min,
+                                  epsilon_decay=parameters.epsilon_decay,
+                                  replay_memory_size=parameters.replay_memory_size,
+                                  exp_pref=parameters.experiment_prefix,
+                                  replay_start_size=parameters.replay_start_size,
+                                  update_frequency=parameters.update_frequency,
+                                  rng=rng)
 
-    experiment = ale_experiment.ALEExperiment(ale, agent,
-                                              defaults.STATE_WIDTH,
-                                              parameters.resize_method,
-                                              parameters.epochs,
-                                              parameters.steps_per_epoch,
-                                              parameters.steps_per_test,
-                                              parameters.frame_skip,
-                                              parameters.death_ends_episode,
-                                              parameters.max_start_nullops,
-                                              rng)
+    expr = experiment.Experiment(env_intf=env_intf, agent=neural_agent,
+                                              num_epochs=parameters.epochs,
+                                              epoch_length=parameters.steps_per_epoch,
+                                              test_length=parameters.steps_per_test,
+                                              terminal_thres=1)
 
 
-    experiment.run()'''
+    expr.run()
 
 
 

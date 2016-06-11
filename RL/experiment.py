@@ -8,11 +8,19 @@ Code for Reinforcement Learning:
 Author: Suber Cui
 Start on 2016.05.06
 """
+import logging
+import numpy as np
+
+#somewhere: import gym
+
 class Experiment(object):
-    def __init__(self,agent,num_epochs,terminal_thres):
-        self.serial=serial
+    def __init__(self,env_intf,agent,num_epochs,epoch_length,
+                 test_length,terminal_thres):
+        self.env=env_intf#env interface
         self.agent=agent
         self.num_epochs=num_epochs
+        self.epoch_length = epoch_length
+        self.test_length = test_length
         self.terminal_thres=terminal_thres
     
     def run(self):
@@ -29,6 +37,16 @@ class Experiment(object):
 #                self.agent.finish_testing(epoch)
             
     def run_epoch(self,epoch,num_steps,testing=False):
+        """ Run one 'epoch' of training or testing, where an epoch is defined
+        by the number of steps executed.  Prints a progress report after
+        every trial
+
+        Arguments:
+        epoch - the current epoch number
+        num_steps - steps per epoch
+        testing - True if this Epoch is used for testing and not training
+
+        """
         #几个比如经过terminal的episode组成epoch
         steps_left=num_steps
         while steps_left>0:
@@ -43,10 +61,12 @@ class Experiment(object):
     def _step(self, action):
         """apply and sendout the action to the environment
         """
-        self.serial.send(action)
+        #self.serial.send(action)
+        self.env.send(action)
         
     def _ifterminal(self,reward):
-        if reward <self.terminal_thres:
+        #TODO: or maybe get from the env
+        if self.env.terminated:
             return True
         else:
             return False
@@ -55,6 +75,8 @@ class Experiment(object):
     def run_episode(self,max_steps,testing):
         """ run a single training episode, till the terminal or the steps end
         """
+        #TODO: _init and start_lives
+        self.env.reset()
         reward,observation=self.get_reward_observe()
         action=self.agent.start_episode(observation)
         num_steps=0
@@ -72,7 +94,10 @@ class Experiment(object):
     
     
     def get_reward_observe(self):
-        sensory=self.serial.read()
-        reward,observe=parsereceive(sensory)
+        #sensory=self.serial.read()
+        #sensory=self.env.read()
+        #reward,observe=parsereceive(sensory)
+        #TODO: sensory的解析去env内部做，所以以上两句变为下面一句
+        reward,observe=self.env.read()
         return reward,observe
         

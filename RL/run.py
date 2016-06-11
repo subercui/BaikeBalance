@@ -14,9 +14,12 @@ class Defaults:
     # ----------------------
     # Experiment Parameters
     # ----------------------
-    STEPS_PER_EPOCH = 50000
+    '''STEPS_PER_EPOCH = 50000
     EPOCHS = 100
-    STEPS_PER_TEST = 10000
+    STEPS_PER_TEST = 10000'''
+    STEPS_PER_EPOCH = 5000
+    EPOCHS = 20
+    STEPS_PER_TEST = 1000
 
     # ----------------------
     # ALE Parameters
@@ -48,7 +51,7 @@ class Defaults:
     FREEZE_INTERVAL = -1
     REPLAY_START_SIZE = 100#还没改到
     RESIZE_METHOD = 'crop'#还没改到
-    STATE_WIDTH = 84
+    STATE_WIDTH = 4
     DEATH_ENDS_EPISODE = 'false'#还没改到
     MAX_START_NULLOPS = 0#还没改到
     DETERMINISTIC = True#还没改到
