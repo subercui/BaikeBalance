@@ -10,6 +10,7 @@ Start on 2016.05.06
 """
 import logging
 import numpy as np
+logger=logging.getLogger('OPDAClogger')
 
 #somewhere: import gym
 
@@ -51,7 +52,7 @@ class Experiment(object):
         steps_left=num_steps
         while steps_left>0:
             prefix = "testing" if testing else "training"
-            logging.info(prefix+"epoch: "+str(epoch)+"steps_left in this epoch: "+
+            logger.info(prefix+"epoch: "+str(epoch)+"steps_left in this epoch: "+
                          str(steps_left))
             _, num_steps=self.run_episode(steps_left,testing)
             

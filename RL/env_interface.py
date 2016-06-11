@@ -22,12 +22,12 @@ class EnvInterface(object):
         self.observation=self.env.reset()
         
     def send(self,action):
-        self.env.render()
+        #self.env.render()
         #now action is a float
         action=int(action>0)#convert to int
         self.observation, self.reward, self.terminated, info = self.env.step(action)
         if self.terminated:
-            print "terminated"
+            #print "terminated"
             self.env.reset()
         
         

@@ -160,12 +160,15 @@ def process_args(args, defaults, description):
 
     return parameters
 
+
 def launch(args, defaults, description):
     """
     Execute a complete training run.
     """
-
-    logging.basicConfig(level=logging.INFO)
+   
+    logger=logging.getLogger('OPDAClogger')
+    logger.setLevel(logging.DEBUG)
+    logger.info("test_______")
     parameters = process_args(args, defaults, description)
 
     if parameters.deterministic:

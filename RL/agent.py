@@ -8,6 +8,7 @@ import os
 import cPickle
 import time
 import logging
+logger=logging.getLogger('OPDAClogger')
 
 import numpy as np
 import D_dataset
@@ -83,7 +84,7 @@ class NeuralAgent(object):
         self.last_action = None
         
     def _open_results_file(self):
-        logging.info("OPENING " + self.exp_dir + '/results.csv')
+        logger.info("OPENING " + self.exp_dir + '/results.csv')
         self.results_file = open(self.exp_dir + '/results.csv', 'w', 0)
         self.results_file.write(\
             'epoch,num_episodes,total_reward,reward_per_epoch,mean_q\n')
@@ -246,12 +247,12 @@ class NeuralAgent(object):
                                      np.clip(reward, -1, 1),
                                      True)
 
-            logging.info("steps/second: {:.2f}".format(\
+            logger.info("steps/second: {:.2f}".format(\
                             self.step_counter/total_time))
 
             if self.batch_counter > 0:
                 self._update_learning_file()
-                logging.info("average loss: {:.4f}".format(\
+                logger.info("average loss: {:.4f}".format(\
                                 np.mean(self.loss_averages)))
                                 
     def finish_epoch(self, epoch):
